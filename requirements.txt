@@ -4,6 +4,6 @@ matplotlib
 seaborn
 boto3
 pyathena
-
 adjusttext
 scikit-learn
+reportlab
