@@ -1,0 +1,7 @@
+data/
+*.csv
+.DS_Store
+__pycache__/
+.idea/
+venv/
+.env
