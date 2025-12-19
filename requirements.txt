@@ -7,3 +7,4 @@ pyathena
 adjusttext
 scikit-learn
 reportlab
+streamlit
