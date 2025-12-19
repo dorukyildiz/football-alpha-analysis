@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import pandas as pd
+import seaborn as sns
 import os
+from adjustText import adjust_text
 from analysis import get_data
 
 
@@ -49,26 +51,22 @@ def create_visualizations(df):
     print("✅ Saved: 02_worst_finishers.png")
 
     # 3. xG vs Actual Goals Scatter with player labels
-    plt.figure(figsize=(12, 10))
+    plt.figure(figsize=(14, 12))
     plt.scatter(df['xg'], df['gls'], alpha=0.5, c=df['finishing_alpha'], cmap='RdYlGn', s=50)
     plt.colorbar(label='Finishing Alpha')
     plt.plot([0, df['xg'].max()], [0, df['xg'].max()], 'k--', label='Perfect conversion (Goals = xG)')
 
-    # Label outliers (top overperformers and underperformers)
-    top_outliers = df.nlargest(5, 'finishing_alpha')
-    worst_outliers = df.nsmallest(5, 'finishing_alpha')
-    outliers = pd.concat([top_outliers, worst_outliers])
+    # Label more outliers (top 10 and worst 10)
+    top_outliers = df.nlargest(10, 'finishing_alpha')
+    worst_outliers = df.nsmallest(10, 'finishing_alpha')
+    top_scorers = df.nlargest(5, 'gls')
+    outliers = pd.concat([top_outliers, worst_outliers, top_scorers]).drop_duplicates(subset='player')
 
+    texts = []
     for _, row in outliers.iterrows():
-        plt.annotate(
-            row['player'],
-            xy=(row['xg'], row['gls']),
-            xytext=(5, 5),
-            textcoords='offset points',
-            fontsize=9,
-            fontweight='bold',
-            arrowprops=dict(arrowstyle='-', color='gray', lw=0.5)
-        )
+        texts.append(plt.text(row['xg'], row['gls'], row['player'], fontsize=8, fontweight='bold'))
+
+    adjust_text(texts, arrowprops=dict(arrowstyle='-', color='gray', lw=0.5))
 
     plt.xlabel('Expected Goals (xG)')
     plt.ylabel('Actual Goals')
@@ -112,26 +110,22 @@ def create_visualizations(df):
     print("✅ Saved: 05_top_scorers.png")
 
     # 6. Assists vs xAG Scatter (Playmaking Analysis)
-    plt.figure(figsize=(12, 10))
+    plt.figure(figsize=(14, 12))
     plt.scatter(df['xag'], df['ast'], alpha=0.5, c=df['playmaking_alpha'], cmap='RdYlGn', s=50)
     plt.colorbar(label='Playmaking Alpha')
     plt.plot([0, df['xag'].max()], [0, df['xag'].max()], 'k--', label='Perfect conversion (Ast = xAG)')
 
-    # Label outliers
-    top_playmakers = df.nlargest(5, 'playmaking_alpha')
-    worst_playmakers = df.nsmallest(5, 'playmaking_alpha')
-    outliers = pd.concat([top_playmakers, worst_playmakers])
+    # Label more outliers (top 10 and worst 10)
+    top_playmakers = df.nlargest(10, 'playmaking_alpha')
+    worst_playmakers = df.nsmallest(10, 'playmaking_alpha')
+    top_assisters = df.nlargest(5, 'ast')
+    outliers = pd.concat([top_playmakers, worst_playmakers, top_assisters]).drop_duplicates(subset='player')
 
+    texts = []
     for _, row in outliers.iterrows():
-        plt.annotate(
-            row['player'],
-            xy=(row['xag'], row['ast']),
-            xytext=(5, 5),
-            textcoords='offset points',
-            fontsize=9,
-            fontweight='bold',
-            arrowprops=dict(arrowstyle='-', color='gray', lw=0.5)
-        )
+        texts.append(plt.text(row['xag'], row['ast'], row['player'], fontsize=8, fontweight='bold'))
+
+    adjust_text(texts, arrowprops=dict(arrowstyle='-', color='gray', lw=0.5))
 
     plt.xlabel('Expected Assists (xAG)')
     plt.ylabel('Actual Assists')
@@ -208,6 +202,27 @@ def create_visualizations(df):
     plt.savefig('outputs/charts/09_worst_teams.png', dpi=150)
     plt.close()
     print("✅ Saved: 09_worst_teams.png")
+
+    # 10. Minutes vs Goals
+    plt.figure(figsize=(12, 10))
+    plt.scatter(df['min'], df['gls'], alpha=0.5, c=df['gls_per90'], cmap='YlOrRd', s=50)
+    plt.colorbar(label='Goals per 90')
+
+    # Label top scorers
+    top_scorers = df.nlargest(10, 'gls')
+    texts = []
+    for _, row in top_scorers.iterrows():
+        texts.append(plt.text(row['min'], row['gls'], row['player'], fontsize=8, fontweight='bold'))
+
+    adjust_text(texts, arrowprops=dict(arrowstyle='-', color='gray', lw=0.5))
+
+    plt.xlabel('Minutes Played')
+    plt.ylabel('Goals')
+    plt.title('Minutes Played vs Goals Scored')
+    plt.tight_layout()
+    plt.savefig('outputs/charts/10_minutes_vs_goals.png', dpi=150)
+    plt.close()
+    print("✅ Saved: 10_minutes_vs_goals.png")
 
     print("\n All visualizations saved to outputs/charts/")
 
