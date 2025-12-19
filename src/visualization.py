@@ -1,16 +1,20 @@
 import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns
+from pathlib import Path
 import os
 from adjustText import adjust_text
 from analysis import get_data
+
+# Project root directory
+PROJECT_ROOT = Path(__file__).parent.parent
+OUTPUT_DIR = PROJECT_ROOT / 'outputs' / 'charts'
 
 
 def create_visualizations(df):
     """Create and save all charts"""
 
     # Create output directory
-    os.makedirs('outputs/charts', exist_ok=True)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # Set style
     plt.style.use('seaborn-v0_8-whitegrid')
@@ -33,7 +37,7 @@ def create_visualizations(df):
     plt.ylabel('Player')
     plt.title('Top 15 Clinical Finishers (2025-26 Season)')
     plt.tight_layout()
-    plt.savefig('outputs/charts/01_top_finishers.png', dpi=150)
+    plt.savefig(OUTPUT_DIR / '01_top_finishers.png', dpi=150)
     plt.close()
     print("✅ Saved: 01_top_finishers.png")
 
@@ -46,7 +50,7 @@ def create_visualizations(df):
     plt.ylabel('Player')
     plt.title('Top 15 Underperforming Finishers (2025-26 Season)')
     plt.tight_layout()
-    plt.savefig('outputs/charts/02_worst_finishers.png', dpi=150)
+    plt.savefig(OUTPUT_DIR / '02_worst_finishers.png', dpi=150)
     plt.close()
     print("✅ Saved: 02_worst_finishers.png")
 
@@ -56,7 +60,7 @@ def create_visualizations(df):
     plt.colorbar(label='Finishing Alpha')
     plt.plot([0, df['xg'].max()], [0, df['xg'].max()], 'k--', label='Perfect conversion (Goals = xG)')
 
-    # Label more outliers (top 10 and worst 10)
+
     top_outliers = df.nlargest(10, 'finishing_alpha')
     worst_outliers = df.nsmallest(10, 'finishing_alpha')
     top_scorers = df.nlargest(5, 'gls')
@@ -73,7 +77,7 @@ def create_visualizations(df):
     plt.title('Expected Goals vs Actual Goals (2025-26 Season)')
     plt.legend()
     plt.tight_layout()
-    plt.savefig('outputs/charts/03_xg_vs_goals.png', dpi=150)
+    plt.savefig(OUTPUT_DIR / '03_xg_vs_goals.png', dpi=150)
     plt.close()
     print("✅ Saved: 03_xg_vs_goals.png")
 
@@ -86,7 +90,7 @@ def create_visualizations(df):
     plt.ylabel('League')
     plt.title('League Comparison: Average Finishing Efficiency')
     plt.tight_layout()
-    plt.savefig('outputs/charts/04_league_comparison.png', dpi=150)
+    plt.savefig(OUTPUT_DIR / '04_league_comparison.png', dpi=150)
     plt.close()
     print("✅ Saved: 04_league_comparison.png")
 
@@ -105,7 +109,7 @@ def create_visualizations(df):
     plt.title('Top 15 Goal Scorers - Goals vs Expected Goals')
     plt.legend()
     plt.tight_layout()
-    plt.savefig('outputs/charts/05_top_scorers.png', dpi=150)
+    plt.savefig(OUTPUT_DIR / '05_top_scorers.png', dpi=150)
     plt.close()
     print("✅ Saved: 05_top_scorers.png")
 
@@ -115,7 +119,7 @@ def create_visualizations(df):
     plt.colorbar(label='Playmaking Alpha')
     plt.plot([0, df['xag'].max()], [0, df['xag'].max()], 'k--', label='Perfect conversion (Ast = xAG)')
 
-    # Label more outliers (top 10 and worst 10)
+
     top_playmakers = df.nlargest(10, 'playmaking_alpha')
     worst_playmakers = df.nsmallest(10, 'playmaking_alpha')
     top_assisters = df.nlargest(5, 'ast')
@@ -132,13 +136,12 @@ def create_visualizations(df):
     plt.title('Expected Assists vs Actual Assists (2025-26 Season)')
     plt.legend()
     plt.tight_layout()
-    plt.savefig('outputs/charts/06_xag_vs_assists.png', dpi=150)
+    plt.savefig(OUTPUT_DIR / '06_xag_vs_assists.png', dpi=150)
     plt.close()
     print("✅ Saved: 06_xag_vs_assists.png")
 
     # 7. Shot Conversion Analysis
     plt.figure(figsize=fig_size)
-    # Filter players with minimum shots
     shooters = df[df['sh'] >= 10].copy()
     shooters['shot_accuracy'] = (shooters['sot'] / shooters['sh']) * 100
     shooters['conversion_rate'] = (shooters['gls'] / shooters['sh']) * 100
@@ -147,7 +150,6 @@ def create_visualizations(df):
                 alpha=0.6, c=shooters['gls'], cmap='YlOrRd', s=60)
     plt.colorbar(label='Total Goals')
 
-    # Label top converters
     top_converters = shooters.nlargest(5, 'conversion_rate')
     for _, row in top_converters.iterrows():
         plt.annotate(row['player'], xy=(row['shot_accuracy'], row['conversion_rate']),
@@ -157,7 +159,7 @@ def create_visualizations(df):
     plt.ylabel('Conversion Rate (% goals per shot)')
     plt.title('Shot Accuracy vs Goal Conversion Rate')
     plt.tight_layout()
-    plt.savefig('outputs/charts/07_shot_conversion.png', dpi=150)
+    plt.savefig(OUTPUT_DIR / '07_shot_conversion.png', dpi=150)
     plt.close()
     print("✅ Saved: 07_shot_conversion.png")
 
@@ -169,7 +171,7 @@ def create_visualizations(df):
         'xg': 'sum',
         'player': 'count'
     }).rename(columns={'player': 'num_players'})
-    team_stats = team_stats[team_stats['num_players'] >= 5]  # Min 5 players
+    team_stats = team_stats[team_stats['num_players'] >= 5]
     team_stats = team_stats.sort_values('finishing_alpha', ascending=True).tail(20)
 
     colors = ['#2ecc71' if x > 0 else '#e74c3c' for x in team_stats['finishing_alpha']]
@@ -178,7 +180,7 @@ def create_visualizations(df):
     plt.ylabel('Team')
     plt.title('Top 20 Most Clinical Teams (2025-26 Season)')
     plt.tight_layout()
-    plt.savefig('outputs/charts/08_team_efficiency.png', dpi=150)
+    plt.savefig(OUTPUT_DIR / '08_team_efficiency.png', dpi=150)
     plt.close()
     print("✅ Saved: 08_team_efficiency.png")
 
@@ -199,7 +201,7 @@ def create_visualizations(df):
     plt.ylabel('Team')
     plt.title('Top 20 Least Clinical Teams (2025-26 Season)')
     plt.tight_layout()
-    plt.savefig('outputs/charts/09_worst_teams.png', dpi=150)
+    plt.savefig(OUTPUT_DIR / '09_worst_teams.png', dpi=150)
     plt.close()
     print("✅ Saved: 09_worst_teams.png")
 
@@ -208,7 +210,6 @@ def create_visualizations(df):
     plt.scatter(df['min'], df['gls'], alpha=0.5, c=df['gls_per90'], cmap='YlOrRd', s=50)
     plt.colorbar(label='Goals per 90')
 
-    # Label top scorers
     top_scorers = df.nlargest(10, 'gls')
     texts = []
     for _, row in top_scorers.iterrows():
@@ -220,11 +221,11 @@ def create_visualizations(df):
     plt.ylabel('Goals')
     plt.title('Minutes Played vs Goals Scored')
     plt.tight_layout()
-    plt.savefig('outputs/charts/10_minutes_vs_goals.png', dpi=150)
+    plt.savefig(OUTPUT_DIR / '10_minutes_vs_goals.png', dpi=150)
     plt.close()
     print("✅ Saved: 10_minutes_vs_goals.png")
 
-    print("\n All visualizations saved to outputs/charts/")
+    print(f"\n✅ All visualizations saved to {OUTPUT_DIR}")
 
 
 if __name__ == "__main__":
