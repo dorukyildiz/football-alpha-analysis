@@ -11,27 +11,19 @@ def get_data():
     )
 
     query = """
-            SELECT player, \
-                   nation, \
-                   pos, \
-                   squad, \
-                   comp, \
-                   age, \
-                   gls, \
-                   ast, \
-                   xg, \
-                   xag,
-                   col_90s, \
-                   g_pk, \
-                   npxg, \
-                   sh, \
-                   sot, \
-                   mp, \
-                   starts, \
-                   min
-            FROM football_analytics.players
-            WHERE col_90s >= 5 \
-            """
+    SELECT player, nation, pos, squad, comp, age, 
+           gls, ast, g_a, xg, xag, npxg, g_pk,
+           col_90s, sh, sot, mp, starts, min,
+           tkl, tklw, blocks, int, tkl_int, clr, err,
+           prgp, prgc, prgr_stats_possession as prgr,
+           kp, xa, ppa,
+           touches, carries, mis, dis,
+           crdy, crdr, recov,
+           pkwon, pkcon,
+           ga, saves, save, cs, pka, pksv
+    FROM football_analytics.players
+    WHERE col_90s >= 5
+    """
     df = pd.read_sql(query, conn)
 
     # Alpha calculations
@@ -88,4 +80,4 @@ def print_analysis(df):
 if __name__ == "__main__":
     df = get_data()
     print_analysis(df)
-    print("\n✅ Analysis complete!")
+    print("\n[OK] Analysis complete!")

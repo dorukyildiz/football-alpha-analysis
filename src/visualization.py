@@ -220,6 +220,9 @@ def create_visualizations(df):
     plt.xlabel('Minutes Played')
     plt.ylabel('Goals')
     plt.title('Minutes Played vs Goals Scored')
+
+    plt.gca().yaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
     plt.tight_layout()
     plt.savefig(OUTPUT_DIR / '10_minutes_vs_goals.png', dpi=150)
     plt.close()
