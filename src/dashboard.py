@@ -4,6 +4,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
 import sys
+import os
+
+# Streamlit Cloud secrets for AWS
+try:
+    if 'aws' in st.secrets:
+        os.environ['AWS_ACCESS_KEY_ID'] = st.secrets['aws']['AWS_ACCESS_KEY_ID']
+        os.environ['AWS_SECRET_ACCESS_KEY'] = st.secrets['aws']['AWS_SECRET_ACCESS_KEY']
+        os.environ['AWS_DEFAULT_REGION'] = st.secrets['aws']['AWS_DEFAULT_REGION']
+except:
+    pass  # Local development
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent))
@@ -253,8 +263,7 @@ def main():
 
             st.subheader("Squad")
             st.dataframe(
-                team_df[['player', 'pos', 'age', 'gls', 'ast', 'xg', 'finishing_alpha']].sort_values('gls',
-                                                                                                     ascending=False),
+                team_df[['player', 'pos', 'age', 'gls', 'ast', 'xg', 'finishing_alpha']].sort_values('gls', ascending=False),
                 hide_index=True
             )
 
@@ -301,17 +310,13 @@ def main():
 
         # Calculate rating
         if position == 'FW':
-            pos_df['score'] = pos_df['gls'].rank(pct=True) * 30 + pos_df['xg'].rank(pct=True) * 20 + pos_df[
-                'finishing_alpha'].rank(pct=True) * 30 + pos_df['ast'].rank(pct=True) * 20
+            pos_df['score'] = pos_df['gls'].rank(pct=True) * 30 + pos_df['xg'].rank(pct=True) * 20 + pos_df['finishing_alpha'].rank(pct=True) * 30 + pos_df['ast'].rank(pct=True) * 20
         elif position == 'MF':
-            pos_df['score'] = pos_df['gls'].rank(pct=True) * 15 + pos_df['ast'].rank(pct=True) * 25 + pos_df[
-                'playmaking_alpha'].rank(pct=True) * 30 + pos_df['xag'].rank(pct=True) * 30
+            pos_df['score'] = pos_df['gls'].rank(pct=True) * 15 + pos_df['ast'].rank(pct=True) * 25 + pos_df['playmaking_alpha'].rank(pct=True) * 30 + pos_df['xag'].rank(pct=True) * 30
         elif position == 'DF':
-            pos_df['score'] = pos_df['tkl'].rank(pct=True) * 30 + pos_df['int'].rank(pct=True) * 30 + pos_df[
-                'clr'].rank(pct=True) * 20 + pos_df['blocks'].rank(pct=True) * 20
+            pos_df['score'] = pos_df['tkl'].rank(pct=True) * 30 + pos_df['int'].rank(pct=True) * 30 + pos_df['clr'].rank(pct=True) * 20 + pos_df['blocks'].rank(pct=True) * 20
         else:
-            pos_df['score'] = pos_df['saves'].rank(pct=True) * 40 + pos_df['cs'].rank(pct=True) * 40 + (
-                        1 - pos_df['ga'].rank(pct=True)) * 20
+            pos_df['score'] = pos_df['saves'].rank(pct=True) * 40 + pos_df['cs'].rank(pct=True) * 40 + (1 - pos_df['ga'].rank(pct=True)) * 20
 
         pos_df['rating'] = (60 + pos_df['score'] * 0.35).clip(60, 95).round(1)
         pos_df['grade'] = pos_df['rating'].apply(get_grade)
@@ -384,14 +389,11 @@ def main():
 
             # Calculate score
             if position == 'FW':
-                candidates['score'] = candidates['gls'].rank(pct=True) * 30 + candidates['finishing_alpha'].rank(
-                    pct=True) * 40 + candidates['xg'].rank(pct=True) * 30
+                candidates['score'] = candidates['gls'].rank(pct=True) * 30 + candidates['finishing_alpha'].rank(pct=True) * 40 + candidates['xg'].rank(pct=True) * 30
             elif position == 'MF':
-                candidates['score'] = candidates['ast'].rank(pct=True) * 30 + candidates['playmaking_alpha'].rank(
-                    pct=True) * 40 + candidates['xag'].rank(pct=True) * 30
+                candidates['score'] = candidates['ast'].rank(pct=True) * 30 + candidates['playmaking_alpha'].rank(pct=True) * 40 + candidates['xag'].rank(pct=True) * 30
             elif position == 'DF':
-                candidates['score'] = candidates['tkl'].rank(pct=True) * 35 + candidates['int'].rank(pct=True) * 35 + \
-                                      candidates['clr'].rank(pct=True) * 30
+                candidates['score'] = candidates['tkl'].rank(pct=True) * 35 + candidates['int'].rank(pct=True) * 35 + candidates['clr'].rank(pct=True) * 30
             else:
                 candidates['score'] = candidates['saves'].rank(pct=True) * 50 + candidates['cs'].rank(pct=True) * 50
 
