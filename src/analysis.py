@@ -1,7 +1,9 @@
 import pandas as pd
 from pyathena import connect
+import streamlit as st
 
 
+@st.cache_data(ttl=3600)
 def get_data():
     """Fetch data from Athena and calculate alpha metrics"""
 
