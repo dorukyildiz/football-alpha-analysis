@@ -2,7 +2,7 @@ name: Update Dataset Weekly
 
 on:
   schedule:
-    - cron: '30 10 * * 1'
+    - cron: '0 17 * * 1'
   workflow_dispatch:
 
 jobs:

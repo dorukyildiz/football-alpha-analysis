@@ -3,7 +3,7 @@ from pyathena import connect
 import streamlit as st
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=43200)
 def get_data():
     """Fetch data from Athena and calculate alpha metrics"""
 
