@@ -1,0 +1,44 @@
+name: Update Dataset Weekly
+
+on:
+  schedule:
+    - cron: '30 10 * * 1'
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install kaggle boto3
+
+      - name: Setup Kaggle
+        run: |
+          mkdir -p ~/.kaggle
+          echo '{"username":"${{ secrets.KAGGLE_USERNAME }}","key":"${{ secrets.KAGGLE_KEY }}"}' > ~/.kaggle/kaggle.json
+          chmod 600 ~/.kaggle/kaggle.json
+
+      - name: Download from Kaggle and Upload to S3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: eu-central-1
+        run: |
+          mkdir -p data
+          kaggle datasets download -d hubertsidorowicz/football-players-stats-2025-2026 -p ./data --unzip -o
+          ls -la ./data/
+          python -c "
+          import boto3
+          s3 = boto3.client('s3')
+          s3.upload_file('./data/players_data-2025_2026.csv', 'football-alpha-analysis-doruk', 'data/players_data-2025_2026.csv')
+          print('Upload complete!')
+          "
