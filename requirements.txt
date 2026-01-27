@@ -8,3 +8,4 @@ adjusttext
 scikit-learn
 reportlab
 streamlit
+altair<5
