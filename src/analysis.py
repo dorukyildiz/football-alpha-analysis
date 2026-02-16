@@ -28,6 +28,19 @@ def get_data():
     """
     df = pd.read_sql(query, conn)
 
+    # Convert numeric columns
+    numeric_cols = ['gls', 'ast', 'g_a', 'xg', 'xag', 'npxg', 'g_pk',
+                    'col_90s', 'sh', 'sot', 'mp', 'starts', 'min',
+                    'tkl', 'tklw', 'blocks', 'int', 'tkl_int', 'clr', 'err',
+                    'prgp', 'prgc', 'prgr', 'kp', 'xa', 'ppa',
+                    'touches', 'carries', 'mis', 'dis',
+                    'crdy', 'crdr', 'recov', 'pkwon', 'pkcon',
+                    'ga', 'saves', 'save', 'cs', 'pka', 'pksv', 'age']
+
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+
     # Alpha calculations
     df['finishing_alpha'] = df['gls'] - df['xg']
     df['playmaking_alpha'] = df['ast'] - df['xag']
