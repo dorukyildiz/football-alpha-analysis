@@ -3,14 +3,14 @@ import streamlit as st
 MAINTENANCE_MODE = True
 
 if MAINTENANCE_MODE:
-    st.set_page_config(page_title="⚽ Football Alpha Analysis", page_icon="⚽", layout="centered")
+    st.set_page_config(page_title="Football Alpha Analysis", page_icon="⚽", layout="centered")
     st.title("Under Maintenance")
     st.markdown("""
     ### We're upgrading our data pipeline!
 
     We're building a new custom dataset !
 
-    **Expected return:** Soon™
+    **Expected return:** Soon
 
     ---
     *Follow progress on [GitHub](https://github.com/dorukyildiz/football-alpha-analysis)*
