@@ -1,274 +1,160 @@
+import os
 import pandas as pd
 import time
+import random
+import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from io import StringIO
 from datetime import datetime
-import warnings
-import re
-import os
 
-warnings.filterwarnings('ignore')
-
-# 13 Leagues Configuration
-LEAGUES = {
-    'Premier League': {
-        'url': 'https://fbref.com/en/comps/9/stats/Premier-League-Stats',
-        'country': 'ENG'
-    },
-    'La Liga': {
-        'url': 'https://fbref.com/en/comps/12/stats/La-Liga-Stats',
-        'country': 'ESP'
-    },
-    'Serie A': {
-        'url': 'https://fbref.com/en/comps/11/stats/Serie-A-Stats',
-        'country': 'ITA'
-    },
-    'Bundesliga': {
-        'url': 'https://fbref.com/en/comps/20/stats/Bundesliga-Stats',
-        'country': 'GER'
-    },
-    'Ligue 1': {
-        'url': 'https://fbref.com/en/comps/13/stats/Ligue-1-Stats',
-        'country': 'FRA'
-    },
-    'Primeira Liga': {
-        'url': 'https://fbref.com/en/comps/32/stats/Primeira-Liga-Stats',
-        'country': 'POR'
-    },
-    'Eredivisie': {
-        'url': 'https://fbref.com/en/comps/23/stats/Eredivisie-Stats',
-        'country': 'NED'
-    },
-    'Pro League': {
-        'url': 'https://fbref.com/en/comps/37/stats/Belgian-Pro-League-Stats',
-        'country': 'BEL'
-    },
-    'Super Lig': {
-        'url': 'https://fbref.com/en/comps/26/stats/Super-Lig-Stats',
-        'country': 'TUR'
-    },
-    'Austrian Bundesliga': {
-        'url': 'https://fbref.com/en/comps/56/stats/Austrian-Bundesliga-Stats',
-        'country': 'AUT'
-    },
-    'Swiss Super League': {
-        'url': 'https://fbref.com/en/comps/57/stats/Swiss-Super-League-Stats',
-        'country': 'SUI'
-    },
-    'Super League Greece': {
-        'url': 'https://fbref.com/en/comps/27/stats/Super-League-Greece-Stats',
-        'country': 'GRE'
-    },
-    'Scottish Premiership': {
-        'url': 'https://fbref.com/en/comps/40/stats/Scottish-Premiership-Stats',
-        'country': 'SCO'
-    }
-}
-
-# Stat types to scrape
-STAT_TYPES = {
-    'standard': 'stats',
-    'shooting': 'shooting',
-    'passing': 'passing',
-    'gca': 'gca',
-    'defense': 'defense',
-    'possession': 'possession',
-    'playing_time': 'playingtime',
-    'misc': 'misc',
-    'keeper': 'keepers',
-    'keeper_adv': 'keepersadv'
+# URLs for scraping
+URLS = {
+    'https://fbref.com/en/comps/Big5/stats/players/Big-5-European-Leagues-Stats': 'stats_standard',
+    'https://fbref.com/en/comps/Big5/shooting/players/Big-5-European-Leagues-Stats': 'stats_shooting',
+    'https://fbref.com/en/comps/Big5/passing/players/Big-5-European-Leagues-Stats': 'stats_passing',
+    'https://fbref.com/en/comps/Big5/passing_types/players/Big-5-European-Leagues-Stats': 'stats_passing_types',
+    'https://fbref.com/en/comps/Big5/gca/players/Big-5-European-Leagues-Stats': 'stats_gca',
+    'https://fbref.com/en/comps/Big5/defense/players/Big-5-European-Leagues-Stats': 'stats_defense',
+    'https://fbref.com/en/comps/Big5/possession/players/Big-5-European-Leagues-Stats': 'stats_possession',
+    'https://fbref.com/en/comps/Big5/playingtime/players/Big-5-European-Leagues-Stats': 'stats_playing_time',
+    'https://fbref.com/en/comps/Big5/misc/players/Big-5-European-Leagues-Stats': 'stats_misc',
+    'https://fbref.com/en/comps/Big5/keepers/players/Big-5-European-Leagues-Stats': 'stats_keeper',
+    'https://fbref.com/en/comps/Big5/keepersadv/players/Big-5-European-Leagues-Stats': 'stats_keeper_adv'
 }
 
 
-def get_stat_url(base_url, stat_type):
-    """Convert standard stats URL to specific stat type URL"""
-    if stat_type == 'stats':
-        return base_url
-    return base_url.replace('/stats/', f'/{stat_type}/')
+def create_driver():
+    """Create undetected Chrome driver"""
+    options = uc.ChromeOptions()
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+
+    driver = uc.Chrome(options=options, version_main=145)
+    return driver
 
 
-def scrape_table(url, retries=3):
-    """Scrape table from URL with retries"""
+def scrape_table(driver, url, table_id, retries=3):
+    """Scrape a single table"""
     for attempt in range(retries):
         try:
-            tables = pd.read_html(url)
-            if tables:
-                for table in tables:
-                    cols = table.columns.tolist()
-                    if 'Player' in cols:
-                        return table
-                    if any('Player' in str(c) for c in cols):
-                        return table
-                return max(tables, key=len)
-            return None
+            print(f"  [{table_id}] Loading... (attempt {attempt + 1})")
+            driver.get(url)
+
+            # Wait for table
+            WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.ID, table_id))
+            )
+
+            # Get HTML and parse
+            html = driver.page_source
+            df = pd.read_html(StringIO(html), attrs={"id": table_id})[0]
+
+            # Flatten multi-index
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.droplevel(0)
+
+            # Clean
+            df = df.loc[:, ~df.columns.duplicated()]
+            if "Player" in df.columns:
+                df = df[df["Player"] != "Player"]
+
+            print(f"    ✓ {len(df)} players")
+            return df
+
         except Exception as e:
-            print(f"    Attempt {attempt + 1} failed: {e}")
+            print(f"    ✗ Error: {e}")
             if attempt < retries - 1:
                 time.sleep(5)
+
     return None
 
 
-def flatten_columns(df):
-    """Flatten multi-level column names"""
-    if isinstance(df.columns, pd.MultiIndex):
-        new_cols = []
-        for col in df.columns:
-            if col[0] == col[1]:
-                new_cols.append(col[0])
-            elif col[1] == '':
-                new_cols.append(col[0])
-            else:
-                new_cols.append(f"{col[0]}_{col[1]}")
-        df.columns = new_cols
-    return df
+def scrape_all_tables():
+    """Scrape all tables"""
+    print("\nStarting browser...")
+    driver = create_driver()
 
+    # İlk sayfaya git, Cloudflare geçsin
+    print("Waiting for Cloudflare...")
+    driver.get("https://fbref.com")
+    time.sleep(5)
 
-def clean_dataframe(df):
-    """Clean dataframe"""
-    df = flatten_columns(df)
+    dfs = {}
 
-    if 'Player' in df.columns:
-        df = df[df['Player'] != 'Player']
-        df = df[df['Player'].notna()]
-
-    df = df.reset_index(drop=True)
-    return df
-
-
-def scrape_league(league_name, league_config):
-    """Scrape all stats for a single league"""
-    print(f"\n{'=' * 60}")
-    print(f"Scraping: {league_name}")
-    print(f"{'=' * 60}")
-
-    base_url = league_config['url']
-    all_stats = {}
-
-    for stat_name, stat_type in STAT_TYPES.items():
-        url = get_stat_url(base_url, stat_type)
-        print(f"  [{stat_name}] Fetching...")
-
-        df = scrape_table(url)
-
+    for url, table_id in URLS.items():
+        df = scrape_table(driver, url, table_id)
         if df is not None:
-            df = clean_dataframe(df)
-            all_stats[stat_name] = df
-            print(f"    ✓ {len(df)} players")
-        else:
-            print(f"    ✗ Failed")
+            dfs[table_id] = df
+        time.sleep(random.uniform(3, 5))
 
-        time.sleep(3)
+    driver.quit()
+    return dfs
 
-    if 'standard' not in all_stats:
-        print(f"  [ERROR] No standard stats for {league_name}")
-        return None
 
-    merged = all_stats['standard'].copy()
-    merged['Comp'] = league_name
-    merged['Country'] = league_config['country']
+def merge_dataframes(dfs):
+    """Merge all tables"""
+    if 'stats_standard' not in dfs:
+        raise ValueError("Missing stats_standard!")
 
-    for stat_name, stat_df in all_stats.items():
-        if stat_name == 'standard':
-            continue
-
-        suffix = f'_{stat_name}'
-        stat_df = stat_df.add_suffix(suffix)
-
-        merge_cols = []
-        if f'Player{suffix}' in stat_df.columns:
-            stat_df = stat_df.rename(columns={f'Player{suffix}': 'Player'})
-            merge_cols.append('Player')
-        if f'Squad{suffix}' in stat_df.columns:
-            stat_df = stat_df.rename(columns={f'Squad{suffix}': 'Squad'})
-            if 'Squad' in merged.columns:
-                merge_cols.append('Squad')
-
-        if not merge_cols:
-            continue
-
-        try:
-            merged = merged.merge(stat_df, on=merge_cols, how='left')
-        except Exception as e:
-            print(f"    [WARN] Could not merge {stat_name}: {e}")
-
-    print(f"  [DONE] {len(merged)} players, {len(merged.columns)} columns")
+    merged = dfs['stats_standard']
+    for name, df in dfs.items():
+        if name != 'stats_standard':
+            merged = merged.merge(df, on=['Player', 'Squad'], how='left', suffixes=('', f'_{name}'))
     return merged
 
 
-def scrape_all_leagues():
-    """Scrape all 13 leagues"""
-    print("=" * 60)
-    print("FBref Football Data Scraper")
-    print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Leagues: {len(LEAGUES)}")
-    print("=" * 60)
+def clean_dataframe(df):
+    """Clean the dataframe"""
+    # Remove 'matches' columns
+    df = df.drop(columns=[c for c in df.columns if "matches" in c.lower()], errors='ignore')
 
-    all_data = []
+    # Fix age (22-150 -> 22)
+    if 'Age' in df.columns:
+        df['Age'] = df['Age'].astype(str).str.split('-').str[0]
+        df['Age'] = pd.to_numeric(df['Age'], errors='coerce')
 
-    for league_name, league_config in LEAGUES.items():
-        df = scrape_league(league_name, league_config)
-
-        if df is not None:
-            all_data.append(df)
-
-        time.sleep(5)
-
-    if not all_data:
-        print("\n[ERROR] No data scraped!")
-        return None
-
-    combined = pd.concat(all_data, ignore_index=True)
-
-    print(f"\n{'=' * 60}")
-    print("SCRAPING COMPLETE")
-    print(f"{'=' * 60}")
-    print(f"Total Players: {len(combined)}")
-    print(f"Total Columns: {len(combined.columns)}")
-    print(f"Leagues: {combined['Comp'].nunique()}")
-
-    return combined
-
-
-def clean_column_names(df):
-    """Clean column names for Athena compatibility"""
-    new_columns = []
-    seen = {}
-
-    for col in df.columns:
-        clean = str(col).lower()
-        clean = re.sub(r'[^a-z0-9_]', '_', clean)
-        clean = re.sub(r'_+', '_', clean)
-        clean = clean.strip('_')
-        if not clean:
-            clean = 'col'
-        if clean[0].isdigit():
-            clean = 'col_' + clean
-
-        if clean in seen:
-            seen[clean] += 1
-            clean = f"{clean}_{seen[clean]}"
-        else:
-            seen[clean] = 1
-
-        new_columns.append(clean)
-
-    df.columns = new_columns
     return df
 
 
-def save_data(df, output_path='data/players_data.csv'):
-    """Save data to CSV"""
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    df = clean_column_names(df)
-    df.to_csv(output_path, index=False)
-    print(f"\n[SAVED] {output_path}")
-    print(f"  Rows: {len(df)}")
-    print(f"  Columns: {len(df.columns)}")
-    return output_path
+def run_scraper():
+    """Main function"""
+    print("=" * 60)
+    print("FBref Scraper - Big 5 European Leagues")
+    print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 60)
+
+    # Scrape
+    dfs = scrape_all_tables()
+
+    if not dfs:
+        print("\n✗ No data scraped!")
+        return None
+
+    # Merge
+    print("\nMerging tables...")
+    merged = merge_dataframes(dfs)
+
+    # Clean
+    print("Cleaning data...")
+    cleaned = clean_dataframe(merged)
+
+    # Save
+    os.makedirs('data', exist_ok=True)
+    output_path = 'data/players_data.csv'
+    cleaned.to_csv(output_path, index=False)
+
+    print(f"\n{'=' * 60}")
+    print("SCRAPING COMPLETE!")
+    print(f"{'=' * 60}")
+    print(f"Total Players: {len(cleaned)}")
+    print(f"Total Columns: {len(cleaned.columns)}")
+    print(f"Saved: {output_path}")
+
+    return cleaned
 
 
 if __name__ == "__main__":
-    df = scrape_all_leagues()
-
-    if df is not None:
-        save_data(df, 'data/players_data.csv')
-        print("\n[OK] Scraping complete!")
-        print("Next: Upload to S3 and update Athena table")
+    run_scraper()
