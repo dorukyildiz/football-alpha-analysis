@@ -1,13 +1,23 @@
+# Data Processing
 pandas
 numpy
+
+# Visualization
 matplotlib
 seaborn
+adjusttext
+
+# AWS
 boto3
 pyathena
-adjusttext
+
+# ML
 scikit-learn
-reportlab
+
+# Scraper
+undetected-chromedriver
 lxml
 html5lib
+
+# Dashboard
 streamlit>=1.32.0
-altair<5
