@@ -10,7 +10,7 @@ if MAINTENANCE_MODE:
 
     We're building a new custom dataset !
 
-    **Expected return:** Soon™
+    **Expected return:** Soon
 
     ---
     *Follow progress on [GitHub](https://github.com/dorukyildiz/football-alpha-analysis)*
