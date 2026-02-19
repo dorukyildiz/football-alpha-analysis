@@ -2,7 +2,7 @@
 
 Data-driven football analytics platform analyzing player performance across Europe's Top 5 leagues using expected goals (xG) metrics and cloud infrastructure.
 
-**[Live Dashboard](https://dorukyildiz-football-alpha-analysis.streamlit.app)**
+**[Live Dashboard](https://football-alpha-analysis-dorukyildiz.streamlit.app)**
 
 ---
 
