@@ -4,18 +4,22 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics.pairwise import cosine_similarity
 from analysis import get_data
 
-# Position-based metrics
-FW_METRICS = ['gls', 'ast', 'g_a', 'xg', 'xag', 'npxg', 'g_pk', 'kp', 'xa', 'ppa',
-              'touches', 'carries', 'prgr', 'mis', 'pkwon', 'pkcon']
+# Position-based metrics (post-Opta: Standard + Shooting + Misc + Understat)
+FW_METRICS = ['gls', 'ast', 'g_a', 'xg', 'xag', 'npxg', 'g_pk',
+              'sh', 'sot', 'g_sh', 'g_sot',
+              'finishing_alpha', 'playmaking_alpha',
+              'pkwon', 'fld', 'crs']
 
-MF_METRICS = ['gls', 'ast', 'g_a', 'xg', 'xag', 'npxg', 'g_pk', 'tkl', 'tklw',
-              'int', 'tkl_int', 'prgp', 'prgc', 'kp', 'xa', 'ppa', 'touches',
-              'carries', 'prgr', 'mis', 'dis', 'crdy', 'crdr', 'recov']
+MF_METRICS = ['gls', 'ast', 'g_a', 'xg', 'xag', 'npxg', 'g_pk',
+              'sh', 'sot', 'tklw', 'int', 'fls', 'fld', 'crs',
+              'crdy', 'crdr',
+              'finishing_alpha', 'playmaking_alpha']
 
-DF_METRICS = ['tkl', 'tklw', 'blocks', 'int', 'tkl_int', 'clr', 'err', 'prgp',
-              'prgc', 'touches', 'carries', 'mis', 'dis', 'crdy', 'crdr', 'recov']
+DF_METRICS = ['tklw', 'int', 'fls', 'fld', 'crdy', 'crdr',
+              'crs', 'gls', 'ast', 'og',
+              'finishing_alpha', 'playmaking_alpha']
 
-GK_METRICS = ['ga', 'saves', 'save', 'cs', 'pka', 'pksv']
+GK_METRICS = ['ga', 'ga90', 'saves', 'savepct', 'cs', 'cspct', 'pka', 'pksv']
 
 
 def prepare_data():
@@ -54,12 +58,10 @@ def filter_by_position(df, player_pos):
 
     def is_compatible(row_pos):
         row_positions = get_all_positions(row_pos)
-        # Check if any position matches
         for pp in player_positions:
             for rp in row_positions:
                 if pp == rp:
                     return True
-                # FW can match with FW,MF or MF,FW
                 if pp in rp or rp in pp:
                     return True
         return False
@@ -80,7 +82,7 @@ def get_metrics_for_position(pos):
     elif primary_pos == 'FW':
         return FW_METRICS
     else:
-        return FW_METRICS + MF_METRICS  # Default to attacking metrics
+        return FW_METRICS + MF_METRICS
 
 
 def calculate_similarity(df, metrics):
@@ -103,7 +105,6 @@ def calculate_similarity(df, metrics):
 def find_similar_players(df, player_name, top_n=5):
     """Find most similar players to a given player"""
 
-    # Find player
     player_idx = df[df['player'].str.lower() == player_name.lower()].index
 
     if len(player_idx) == 0:
@@ -117,26 +118,20 @@ def find_similar_players(df, player_name, top_n=5):
     player_idx = player_idx[0]
     original = df.loc[player_idx]
 
-    # Filter by position
     filtered_df = filter_by_position(df, original['pos'])
 
     if len(filtered_df) < 2:
         return None, None, None, f"Not enough players with position {original['pos']}"
 
-    # Get position-specific metrics
     metrics = get_metrics_for_position(original['pos'])
-
-    # Calculate similarity on filtered players
     similarity_matrix, used_metrics = calculate_similarity(filtered_df, metrics)
 
     if similarity_matrix is None:
         return None, None, None, "Could not calculate similarity"
 
-    # Find player's new index in filtered df
     player_row = filtered_df.index.get_loc(player_idx)
     similarities = similarity_matrix[player_row]
 
-    # Get top similar (excluding self)
     similar_indices = np.argsort(similarities)[::-1][1:top_n + 1]
 
     results = []
@@ -164,36 +159,24 @@ def compare_metrics(original, similar_players, df, metrics):
     print(f"METRIC COMPARISON ({len(display_metrics)} metrics)")
     print("=" * 140)
 
-    # Header
     header = f"{'Player':<25}"
     for m in display_metrics:
         header += f"{m:<8}"
     print(header)
     print("-" * 140)
 
-    # Original player
     row = f">> {original['player']:<22}"
     for m in display_metrics:
         val = original[m] if m in original and pd.notna(original[m]) else 0
         row += f"{val:<8.1f}"
     print(row)
 
-    # Similar players
     for sp in similar_players:
         p = df[df['player'] == sp['player']].iloc[0]
         row = f"({sp['similarity']:.0f}%) {p['player']:<19}"
         for m in display_metrics:
             val = p[m] if m in p and pd.notna(p[m]) else 0
             row += f"{val:<8.1f}"
-        print(row)
-
-    # Similar players
-    for sp in similar_players:
-        p = df[df['player'] == sp['player']].iloc[0]
-        row = f"({sp['similarity']:.0f}%) {p['player']:<19}"
-        for m in display_metrics:
-            val = p[m] if m in p and pd.notna(p[m]) else 0
-            row += f"{val:<10.1f}"
         print(row)
 
 

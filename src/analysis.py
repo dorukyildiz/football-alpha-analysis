@@ -43,16 +43,27 @@ def get_data():
 
     df.columns = [c.lower().strip() for c in df.columns]
 
-    numeric_cols = ['gls', 'ast', 'g_a', 'xg', 'xag', 'npxg', 'g_pk',
-                    'col_90s', 'sh', 'sot', 'mp', 'starts', 'min',
-                    'tkl', 'tklw', 'blocks', 'int', 'tkl_int', 'clr', 'err',
-                    'prgp', 'prgc', 'prgr', 'kp', 'xa', 'ppa',
-                    'touches', 'carries', 'mis', 'dis',
-                    'crdy', 'crdr', 'recov', 'pkwon', 'pkcon',
-                    'ga', 'saves', 'save', 'cs', 'pka', 'pksv', 'age',
-                    'xgchain', 'xgbuildup',
-                    'finishing_alpha', 'playmaking_alpha',
-                    'gls_per90', 'xg_per90', 'ast_per90', 'xag_per90', 'alpha_per90']
+    # Post-Opta numeric columns (Standard + Shooting + Keeper + Playing Time + Misc + Understat)
+    numeric_cols = [
+        # Standard stats
+        'gls', 'ast', 'g_a', 'g_pk', 'pk', 'pkatt', 'crdy', 'crdr', 'g_a_pk',
+        'mp', 'starts', 'min', 'col_90s', 'age',
+        # Shooting
+        'sh', 'sot', 'sotpct', 'sh_90', 'sot_90', 'g_sh', 'g_sot',
+        # Keeper
+        'ga', 'ga90', 'sota', 'saves', 'savepct', 'cs', 'cspct', 'pka', 'pksv', 'pkm',
+        # Playing Time
+        'mn_mp', 'minpct', 'mn_start', 'compl', 'subs', 'mn_sub', 'unsub', 'ppm',
+        'ong', 'onga', 'on_off',
+        # Misc
+        'fls', 'fld', 'off', 'crs', 'int', 'tklw', 'pkwon', 'pkcon', 'og',
+        # Understat xG
+        'xg', 'xag', 'npxg', 'xgchain', 'xgbuildup',
+        'us_shots', 'us_key_passes', 'us_npg',
+        # Alpha metrics
+        'finishing_alpha', 'playmaking_alpha',
+        'gls_per90', 'xg_per90', 'ast_per90', 'xag_per90', 'alpha_per90',
+    ]
 
     for col in numeric_cols:
         if col in df.columns:
@@ -77,9 +88,6 @@ def get_data():
     if 'playmaking_alpha' not in df.columns or df['playmaking_alpha'].isna().all():
         if 'ast' in df.columns and 'xag' in df.columns:
             df['playmaking_alpha'] = df['ast'] - df['xag']
-
-    if 'xa' in df.columns and 'xag' not in df.columns:
-        df['xag'] = df['xa']
 
     if 'col_90s' in df.columns:
         mask = df['col_90s'] > 0

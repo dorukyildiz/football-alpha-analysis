@@ -9,7 +9,7 @@ from analysis import get_data
 PROJECT_ROOT = Path(__file__).parent.parent
 OUTPUT_DIR = PROJECT_ROOT / 'outputs' / 'rankings'
 
-# Position-based weights for scoring
+# Position-based weights for scoring (post-Opta: adjusted for available columns)
 FW_WEIGHTS = {
     'gls': 0.25,
     'ast': 0.10,
@@ -32,20 +32,20 @@ MF_WEIGHTS = {
     'gls_per90': 0.05,
     'ast_per90': 0.10,
     'col_90s': 0.10,
-    'kp': 0.10
+    'crs': 0.10
 }
 
 DF_WEIGHTS = {
     'gls': 0.05,
     'ast': 0.05,
-    'tkl': 0.15,
-    'int': 0.15,
-    'clr': 0.10,
-    'blocks': 0.10,
+    'tklw': 0.20,
+    'int': 0.20,
+    'fld': 0.10,
     'col_90s': 0.15,
     'finishing_alpha': 0.05,
     'playmaking_alpha': 0.05,
-    'recov': 0.15
+    'crdy': -0.05,
+    'fls': -0.10
 }
 
 GK_WEIGHTS = {
@@ -53,7 +53,7 @@ GK_WEIGHTS = {
     'cs': 0.25,
     'ga': -0.20,
     'col_90s': 0.15,
-    'save': 0.15
+    'savepct': 0.15
 }
 
 LEAGUES = [
@@ -254,13 +254,13 @@ def create_comparison_chart(all_rankings, league=None):
             ax.set_title(f'Top 5 {position}', fontsize=12, fontweight='bold')
             ax.invert_yaxis()
 
-    title = 'Top Players by Position (2025-26)'
+    title = 'Top 5 Players by Position (2025-26)'
     if league:
         title += f' - {league}'
     plt.suptitle(title, fontsize=14, fontweight='bold')
     plt.tight_layout()
 
-    filename = "all_positions_comparison"
+    filename = "position_comparison"
     if league:
         filename += f"_{league.lower().replace(' ', '_')}"
     filename += ".png"

@@ -9,42 +9,40 @@ from analysis import get_data
 PROJECT_ROOT = Path(__file__).parent.parent
 OUTPUT_DIR = PROJECT_ROOT / 'outputs' / 'comparisons'
 
-# FW Metrics
+# Post-Opta category metrics (Standard + Shooting + Misc + Understat)
 FW_METRICS = {
     'attacking': ['gls', 'ast', 'g_a', 'xg', 'xag', 'npxg', 'g_pk'],
-    'creativity': ['kp', 'xa', 'ppa'],
-    'possession': ['touches', 'carries', 'prgr', 'mis'],
-    'penalties': ['pkwon']
+    'shooting': ['sh', 'sot', 'g_sh', 'g_sot'],
+    'alpha': ['finishing_alpha', 'playmaking_alpha'],
+    'misc': ['fld', 'crs', 'pkwon'],
 }
 
-# MF Metrics
 MF_METRICS = {
-    'attacking': ['gls', 'ast', 'g_a', 'xg', 'xag', 'npxg', 'g_pk', 'xa'],
-    'passing': ['prgp', 'prgc', 'kp', 'ppa'],
-    'possession': ['touches', 'carries', 'prgr', 'mis', 'dis'],
-    'defensive': ['tkl', 'tklw', 'int', 'tkl_int', 'crdy', 'crdr', 'recov']
-}
-
-# DF Metrics
-DF_METRICS = {
-    'defensive': ['tkl', 'tklw', 'blocks', 'int', 'tkl_int', 'clr', 'err'],
-    'passing': ['prgp', 'prgc', 'touches', 'carries', 'mis'],
-    'discipline': ['dis', 'crdy', 'crdr', 'recov']
-}
-
-# GK Metrics
-GK_METRICS = {
-    'goalkeeping': ['ga', 'saves', 'save', 'cs', 'pka', 'pksv']
-}
-
-# All outfield metrics combined
-ALL_OUTFIELD_METRICS = {
-    'attacking': ['gls', 'ast', 'g_a', 'xg', 'xag', 'npxg', 'g_pk', 'xa'],
-    'passing': ['prgp', 'prgc', 'kp', 'ppa'],
-    'possession': ['touches', 'carries', 'prgr', 'mis', 'dis'],
-    'defensive': ['tkl', 'tklw', 'blocks', 'int', 'tkl_int', 'clr', 'err', 'recov'],
+    'attacking': ['gls', 'ast', 'g_a', 'xg', 'xag', 'npxg', 'g_pk'],
+    'shooting': ['sh', 'sot', 'g_sh'],
+    'defensive': ['tklw', 'int', 'fls', 'fld'],
+    'alpha': ['finishing_alpha', 'playmaking_alpha'],
     'discipline': ['crdy', 'crdr'],
-    'penalties': ['pkwon', 'pkcon']
+}
+
+DF_METRICS = {
+    'defensive': ['tklw', 'int', 'fls', 'fld'],
+    'attacking': ['gls', 'ast'],
+    'alpha': ['finishing_alpha', 'playmaking_alpha'],
+    'discipline': ['crdy', 'crdr', 'crs'],
+}
+
+GK_METRICS = {
+    'goalkeeping': ['ga', 'ga90', 'saves', 'savepct', 'cs', 'cspct', 'pka', 'pksv'],
+}
+
+ALL_OUTFIELD_METRICS = {
+    'attacking': ['gls', 'ast', 'g_a', 'xg', 'xag', 'npxg', 'g_pk'],
+    'shooting': ['sh', 'sot', 'g_sh', 'g_sot'],
+    'defensive': ['tklw', 'int', 'fls', 'fld'],
+    'alpha': ['finishing_alpha', 'playmaking_alpha'],
+    'discipline': ['crdy', 'crdr'],
+    'misc': ['crs', 'pkwon', 'pkcon', 'off'],
 }
 
 
@@ -88,15 +86,12 @@ def get_comparison_metrics(pos1, pos2):
     is_gk1 = is_goalkeeper(pos1)
     is_gk2 = is_goalkeeper(pos2)
 
-    # Both GKs
     if is_gk1 and is_gk2:
         return GK_METRICS
 
-    # One is GK, one is not - not allowed
     if is_gk1 or is_gk2:
         return None
 
-    # Same position
     if primary1 == primary2:
         if primary1 == 'FW':
             return FW_METRICS
@@ -105,7 +100,6 @@ def get_comparison_metrics(pos1, pos2):
         elif primary1 == 'DF':
             return DF_METRICS
 
-    # Different positions (both outfield) - use all outfield metrics
     return ALL_OUTFIELD_METRICS
 
 
@@ -120,17 +114,14 @@ def compare_players(df, player1_name, player2_name):
     if err2:
         return None, None, None, err2
 
-    # Check GK restriction
     if is_goalkeeper(p1['pos']) != is_goalkeeper(p2['pos']):
         return None, None, None, "Cannot compare goalkeeper with outfield player"
 
-    # Get metrics
     metrics = get_comparison_metrics(p1['pos'], p2['pos'])
 
     if metrics is None:
         return None, None, None, "Cannot determine comparison metrics"
 
-    # Filter to available columns
     available_metrics = {}
     for category, metric_list in metrics.items():
         available = [m for m in metric_list if m in df.columns]
@@ -147,7 +138,6 @@ def print_comparison(p1, p2, metrics_dict, df):
     print("PLAYER COMPARISON")
     print("=" * 80)
 
-    # Basic info
     print(f"\n{'ATTRIBUTE':<20} {p1['player']:<25} {p2['player']:<25}")
     print("-" * 80)
     print(f"{'Team':<20} {p1['squad']:<25} {p2['squad']:<25}")
@@ -158,10 +148,8 @@ def print_comparison(p1, p2, metrics_dict, df):
     p1_wins = 0
     p2_wins = 0
 
-    # Lower is better for these metrics
-    lower_is_better = ['ga', 'mis', 'dis', 'crdy', 'crdr', 'err', 'pkcon']
+    lower_is_better = ['ga', 'ga90', 'fls', 'crdy', 'crdr', 'pkcon', 'og', 'off']
 
-    # Stats by category
     for category, metrics in metrics_dict.items():
         print("\n" + "-" * 80)
         print(f"{category.upper()}")
@@ -192,22 +180,6 @@ def print_comparison(p1, p2, metrics_dict, df):
 
             print(f"{m:<20} {val1:<10.1f} {marker1:<5} {val2:<10.1f} {marker2:<5}")
 
-    # Alpha metrics
-    print("\n" + "-" * 80)
-    print("ALPHA METRICS")
-    print("-" * 80)
-
-    fa1 = p1['finishing_alpha'] if 'finishing_alpha' in p1 else 0
-    fa2 = p2['finishing_alpha'] if 'finishing_alpha' in p2 else 0
-    pa1 = p1['playmaking_alpha'] if 'playmaking_alpha' in p1 else 0
-    pa2 = p2['playmaking_alpha'] if 'playmaking_alpha' in p2 else 0
-
-    print(
-        f"{'Finishing Alpha':<20} {fa1:<10.2f} {'[+]' if fa1 > fa2 else '':<5} {fa2:<10.2f} {'[+]' if fa2 > fa1 else '':<5}")
-    print(
-        f"{'Playmaking Alpha':<20} {pa1:<10.2f} {'[+]' if pa1 > pa2 else '':<5} {pa2:<10.2f} {'[+]' if pa2 > pa1 else '':<5}")
-
-    # Final score
     print("\n" + "=" * 80)
     print(f"RESULT: {p1['player']} wins {p1_wins} | {p2['player']} wins {p2_wins}")
     print("=" * 80)
@@ -218,10 +190,9 @@ def create_comparison_chart(p1, p2, metrics_dict, df):
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # Flatten metrics for bar chart (max 12)
     all_metrics = []
     for category, metrics in metrics_dict.items():
-        all_metrics.extend(metrics[:4])  # Max 4 per category
+        all_metrics.extend(metrics[:4])
 
     display_metrics = all_metrics[:12]
 
@@ -268,10 +239,9 @@ def create_radar_chart(p1, p2, metrics_dict, df):
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # Select max 8 metrics for radar
     all_metrics = []
     for category, metrics in metrics_dict.items():
-        all_metrics.extend(metrics[:2])  # Max 2 per category
+        all_metrics.extend(metrics[:2])
 
     display_metrics = all_metrics[:8]
 
@@ -338,8 +308,8 @@ def create_category_charts(p1, p2, metrics_dict, df):
         width = 0.35
 
         fig, ax = plt.subplots(figsize=(max(10, len(metrics) * 1.5), 6))
-        bars1 = ax.bar(x - width / 2, vals1, width, label=p1['player'], color='#3498db')
-        bars2 = ax.bar(x + width / 2, vals2, width, label=p2['player'], color='#e74c3c')
+        ax.bar(x - width / 2, vals1, width, label=p1['player'], color='#3498db')
+        ax.bar(x + width / 2, vals2, width, label=p2['player'], color='#e74c3c')
 
         ax.set_ylabel('Value')
         ax.set_title(f"{category.upper()}: {p1['player']} vs {p2['player']}")
