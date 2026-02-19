@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import streamlit as st
 
-DATA_SOURCE = os.environ.get('DATA_SOURCE', 'athena')
+DATA_SOURCE = os.environ.get('DATA_SOURCE', 'local')
 LOCAL_CSV_PATH = os.environ.get('LOCAL_CSV', 'data/players_data.csv')
 
 
