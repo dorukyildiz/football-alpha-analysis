@@ -9,46 +9,33 @@ from datetime import datetime
 PROJECT_ROOT = Path(__file__).parent.parent
 DATA_DIR = PROJECT_ROOT / 'data'
 
+# Understat squad name → FBref squad name
 TEAM_NAME_MAP = {
+    # Premier League
     'Manchester United': 'Manchester Utd',
-    'Newcastle United': 'Newcastle Utd',
     'Wolverhampton Wanderers': 'Wolves',
-    'Nottingham Forest': "Nott'ham Forest",
-    'Leicester': 'Leicester City',
+    'Tottenham': 'Tottenham Hotspur',
+    'West Ham': 'West Ham United',
+    'Leeds': 'Leeds United',
+    # La Liga
     'Atletico Madrid': 'Atlético Madrid',
-    'Real Betis': 'Betis',
+    'Alaves': 'Alavés',
+    'Real Oviedo': 'Oviedo',
+    # Bundesliga
     'Bayer Leverkusen': 'Leverkusen',
     'Borussia Dortmund': 'Dortmund',
-    'Borussia M.Gladbach': "M'Gladbach",
+    'Borussia M.Gladbach': 'Gladbach',
     'RasenBallsport Leipzig': 'RB Leipzig',
-    'Eintracht Frankfurt': 'Eint Frankfurt',
     'VfB Stuttgart': 'Stuttgart',
-    'VfL Wolfsburg': 'Wolfsburg',
-    'SC Freiburg': 'Freiburg',
-    'FC Augsburg': 'Augsburg',
-    'FSV Mainz 05': 'Mainz 05',
-    '1. FC Heidenheim': 'Heidenheim',
-    'FC St. Pauli': 'St. Pauli',
-    '1. FC Union Berlin': 'Union Berlin',
-    'TSG Hoffenheim': 'Hoffenheim',
-    'VfL Bochum': 'Bochum',
+    'FC Cologne': 'Köln',
+    'FC Heidenheim': 'Heidenheim',
+    'St. Pauli': 'St Pauli',
+    # Serie A
     'AC Milan': 'Milan',
-    'Paris Saint Germain': 'Paris S-G',
-    'Olympique Marseille': 'Marseille',
-    'Olympique Lyonnais': 'Lyon',
-    'AS Monaco': 'Monaco',
-    'LOSC Lille': 'Lille',
-    'Stade Rennais': 'Rennes',
-    'RC Strasbourg Alsace': 'Strasbourg',
-    'Stade Brestois 29': 'Brest',
-    'RC Lens': 'Lens',
-    'OGC Nice': 'Nice',
-    'FC Nantes': 'Nantes',
-    'Stade de Reims': 'Reims',
-    'AJ Auxerre': 'Auxerre',
-    'Angers SCO': 'Angers',
-    'Le Havre AC': 'Le Havre',
-    'AS Saint-Etienne': 'Saint-Étienne',
+    'Parma Calcio 1913': 'Parma',
+    'Verona': 'Hellas Verona',
+    # Ligue 1
+    'Paris Saint Germain': 'Paris Saint-Germain',
 }
 
 LEAGUE_MAP = {
@@ -59,11 +46,30 @@ LEAGUE_MAP = {
     'Ligue 1': 'fr Ligue 1',
 }
 
+# Special character replacements before ASCII normalization
+CHAR_MAP = str.maketrans({
+    'ı': 'i', 'İ': 'I',
+    'ð': 'd', 'Ð': 'D',
+    'ø': 'o', 'Ø': 'O',
+    'ł': 'l', 'Ł': 'L',
+    'đ': 'd', 'Đ': 'D',
+})
+
+# FBref normalized name → Understat normalized name (edge cases)
+PLAYER_NAME_MAP = {
+    'kylian mbappe': 'kylian mbappe-lottin',
+    'viktor tsyhankov': 'viktor tsygankov',
+    'ruslan malinovskyi': 'ruslan malinovskiy',
+    'mohamed ali cho': 'mohamed ali-cho',
+    'matias soule': 'matias soule malvano',
+}
+
 
 def normalize_name(name):
     if pd.isna(name):
         return ''
-    nfkd = unicodedata.normalize('NFKD', str(name))
+    name = str(name).translate(CHAR_MAP)
+    nfkd = unicodedata.normalize('NFKD', name)
     ascii_name = nfkd.encode('ASCII', 'ignore').decode('ASCII')
     ascii_name = ascii_name.lower().strip()
     ascii_name = re.sub(r'\s+', ' ', ascii_name)
@@ -264,6 +270,9 @@ def run_merge(fbref_path=None, understat_path=None, output_path=None):
     print("\nLoading data...")
     fbref_df = load_fbref_data(fbref_path)
     us_df = load_understat_data(understat_path)
+
+    # Apply player name mapping for known mismatches
+    fbref_df['player_norm'] = fbref_df['player_norm'].replace(PLAYER_NAME_MAP)
 
     print("\nMerging data (3-step process)...")
     merged = merge_exact(fbref_df, us_df)

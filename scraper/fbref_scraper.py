@@ -13,18 +13,13 @@ from datetime import datetime
 PROJECT_ROOT = Path(__file__).parent.parent
 DATA_DIR = PROJECT_ROOT / 'data'
 
+# Post-Opta FBref tables (2025-26)
 URLS = {
     'https://fbref.com/en/comps/Big5/stats/players/Big-5-European-Leagues-Stats': 'stats_standard',
     'https://fbref.com/en/comps/Big5/shooting/players/Big-5-European-Leagues-Stats': 'stats_shooting',
-    'https://fbref.com/en/comps/Big5/passing/players/Big-5-European-Leagues-Stats': 'stats_passing',
-    'https://fbref.com/en/comps/Big5/passing_types/players/Big-5-European-Leagues-Stats': 'stats_passing_types',
-    'https://fbref.com/en/comps/Big5/gca/players/Big-5-European-Leagues-Stats': 'stats_gca',
-    'https://fbref.com/en/comps/Big5/defense/players/Big-5-European-Leagues-Stats': 'stats_defense',
-    'https://fbref.com/en/comps/Big5/possession/players/Big-5-European-Leagues-Stats': 'stats_possession',
+    'https://fbref.com/en/comps/Big5/keepers/players/Big-5-European-Leagues-Stats': 'stats_keeper',
     'https://fbref.com/en/comps/Big5/playingtime/players/Big-5-European-Leagues-Stats': 'stats_playing_time',
     'https://fbref.com/en/comps/Big5/misc/players/Big-5-European-Leagues-Stats': 'stats_misc',
-    'https://fbref.com/en/comps/Big5/keepers/players/Big-5-European-Leagues-Stats': 'stats_keeper',
-    'https://fbref.com/en/comps/Big5/keepersadv/players/Big-5-European-Leagues-Stats': 'stats_keeper_adv'
 }
 
 
@@ -132,7 +127,7 @@ def clean_dataframe(df):
 
 def run_scraper():
     print("=" * 60)
-    print("FBref Scraper - Big 5 European Leagues (Basic Stats)")
+    print("FBref Scraper - Big 5 European Leagues")
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
