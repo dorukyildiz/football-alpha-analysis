@@ -14,10 +14,17 @@ pyathena
 # ML
 scikit-learn
 
-# Scraper
+# Scraper - FBref
 undetected-chromedriver
 lxml
 html5lib
 
+# Scraper - Understat
+requests
+beautifulsoup4
+
 # Dashboard
 streamlit>=1.32.0
+
+# Scout Report PDF
+reportlab

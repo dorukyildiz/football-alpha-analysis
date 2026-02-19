@@ -1,30 +1,37 @@
 import boto3
 import os
+from pathlib import Path
 from datetime import datetime
 
+PROJECT_ROOT = Path(__file__).parent.parent
+DATA_DIR = PROJECT_ROOT / 'data'
 S3_BUCKET = 'football-alpha-analysis-doruk'
-S3_KEY = 'data/players_data.csv'
-LOCAL_FILE = 'data/players_data.csv'
+
+FILES_TO_UPLOAD = {
+    'players_data.csv': 'data/players_data.csv',
+    'fbref_players.csv': 'data/fbref_players.csv',
+    'understat_players.csv': 'data/understat_players.csv',
+}
 
 
 def upload_to_s3():
-    """Upload CSV to S3"""
-
-    if not os.path.exists(LOCAL_FILE):
-        print(f"[ERROR] File not found: {LOCAL_FILE}")
-        return False
-
     s3 = boto3.client('s3')
+    ts = datetime.now().strftime('%Y%m%d_%H%M')
 
-    try:
-        print(f"Uploading {LOCAL_FILE} to s3://{S3_BUCKET}/{S3_KEY}")
-        s3.upload_file(LOCAL_FILE, S3_BUCKET, S3_KEY)
-        print(f"[OK] Upload complete!")
-        print(f"  Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        return True
-    except Exception as e:
-        print(f"[ERROR] Upload failed: {e}")
-        return False
+    for filename, s3_key in FILES_TO_UPLOAD.items():
+        local_path = DATA_DIR / filename
+        if not local_path.exists():
+            print(f"[SKIP] Not found: {local_path}")
+            continue
+        try:
+            s3.upload_file(str(local_path), S3_BUCKET, s3_key)
+            print(f"[OK] {filename} -> s3://{S3_BUCKET}/{s3_key}")
+
+            archive_key = f"archive/{filename.replace('.csv', '')}_{ts}.csv"
+            s3.upload_file(str(local_path), S3_BUCKET, archive_key)
+            print(f"[OK] Archived: {archive_key}")
+        except Exception as e:
+            print(f"[ERROR] {e}")
 
 
 if __name__ == "__main__":
