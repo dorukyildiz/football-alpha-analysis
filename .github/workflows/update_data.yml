@@ -17,22 +17,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      # ── Install Chrome (for undetected-chromedriver) ──
-      - name: Install Chrome
-        run: |
-          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
-          google-chrome --version
-
-      # ── Install Python dependencies ──
+      # ── Install dependencies ──
       - name: Install Python packages
-        run: |
-          pip install pandas numpy boto3 lxml html5lib
-          pip install undetected-chromedriver selenium
-          pip install playwright
-          playwright install --with-deps chromium
+        run: pip install pandas numpy boto3 lxml html5lib playwright
 
-      # ── Create data directory ──
+      - name: Install Playwright Chromium
+        run: playwright install --with-deps chromium
+
       - name: Create data directory
         run: mkdir -p data
 
@@ -51,7 +42,6 @@ jobs:
         run: |
           echo "=== Scraped files ==="
           ls -la data/
-          echo ""
           if [ ! -f data/fbref_players.csv ]; then
             echo "[ERROR] fbref_players.csv missing"
             exit 1
