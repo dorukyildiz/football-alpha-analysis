@@ -1,11 +1,30 @@
+# Data Processing
 pandas
 numpy
+
+# Visualization
 matplotlib
 seaborn
+adjusttext
+
+# AWS
 boto3
 pyathena
-adjusttext
+
+# ML
 scikit-learn
-reportlab
+
+# Scraper - FBref
+undetected-chromedriver
+lxml
+html5lib
+
+# Scraper - Understat
+requests
+beautifulsoup4
+
+# Dashboard
 streamlit>=1.32.0
-altair<5
+
+# Scout Report PDF
+reportlab

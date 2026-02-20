@@ -10,12 +10,12 @@ from similarity import calculate_similarity, FW_METRICS, MF_METRICS, DF_METRICS,
 PROJECT_ROOT = Path(__file__).parent.parent
 OUTPUT_DIR = PROJECT_ROOT / 'outputs' / 'transfers'
 
-# Position metrics for scoring
+# Position metrics for scoring (post-Opta: Standard + Shooting + Misc + Understat)
 POSITION_METRICS = {
-    'FW': ['gls', 'ast', 'xg', 'xag', 'finishing_alpha'],
-    'MF': ['gls', 'ast', 'xg', 'xag', 'kp', 'prgp', 'prgc'],
-    'DF': ['tkl', 'int', 'clr', 'blocks', 'recov'],
-    'GK': ['saves', 'cs', 'save']
+    'FW': ['gls', 'ast', 'xg', 'xag', 'finishing_alpha', 'sh', 'sot', 'g_sh'],
+    'MF': ['gls', 'ast', 'xg', 'xag', 'playmaking_alpha', 'crs', 'tklw', 'int'],
+    'DF': ['tklw', 'int', 'fld', 'fls', 'crdy'],
+    'GK': ['saves', 'savepct', 'cs', 'cspct', 'ga'],
 }
 
 
@@ -74,7 +74,11 @@ def analyze_team_needs(df, team_name):
                     # Get league percentile
                     league_df = df[df['comp'] == league]
                     if m in league_df.columns:
-                        percentile = (league_df[m] < row[m]).sum() / len(league_df) * 100
+                        # For GA, lower is better
+                        if m == 'ga':
+                            percentile = (1 - (league_df[m] < row[m]).sum() / len(league_df)) * 100
+                        else:
+                            percentile = (league_df[m] < row[m]).sum() / len(league_df) * 100
                         rating += percentile
                         count += 1
 
@@ -158,14 +162,18 @@ def find_transfer_targets(df, team_df, position, budget_tier='all', top_n=10):
 
     # Calculate rating for each candidate
     metrics = POSITION_METRICS.get(position, [])
+    lower_is_better = ['ga', 'fls', 'crdy']
 
     scores = []
     for idx, row in candidates.iterrows():
         score = 0
         count = 0
         for m in metrics:
-            if m in row and pd.notna(row[m]):
-                percentile = (candidates[m] < row[m]).sum() / len(candidates) * 100
+            if m in row and pd.notna(row[m]) and m in candidates.columns:
+                if m in lower_is_better:
+                    percentile = (1 - (candidates[m] < row[m]).sum() / len(candidates)) * 100
+                else:
+                    percentile = (candidates[m] < row[m]).sum() / len(candidates) * 100
                 score += percentile
                 count += 1
 

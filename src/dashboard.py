@@ -1,22 +1,4 @@
 import streamlit as st
-# ============== MAINTENANCE MODE ==============
-MAINTENANCE_MODE = True
-
-if MAINTENANCE_MODE:
-    st.set_page_config(page_title="⚽ Football Alpha Analysis", page_icon="⚽", layout="centered")
-    st.title("Under Maintenance")
-    st.markdown("""
-    ### We're upgrading our data pipeline!
-
-    We're building a new custom dataset !
-
-    **Expected return:** Soon
-
-    ---
-    *Follow progress on [GitHub](https://github.com/dorukyildiz/football-alpha-analysis)*
-    """)
-    st.stop()
-# ============================================
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -85,15 +67,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Position metrics
-FW_METRICS = ['gls', 'ast', 'g_a', 'xg', 'xag', 'npxg', 'g_pk', 'kp', 'xa', 'ppa', 'touches', 'carries', 'prgr', 'mis', 'pkwon']
-MF_METRICS = ['gls', 'ast', 'g_a', 'xg', 'xag', 'npxg', 'g_pk', 'tkl', 'tklw', 'int', 'tkl_int', 'prgp', 'prgc', 'kp', 'xa', 'ppa', 'touches', 'carries', 'prgr', 'mis', 'dis', 'crdy', 'crdr', 'recov']
-DF_METRICS = ['tkl', 'tklw', 'blocks', 'int', 'tkl_int', 'clr', 'err', 'prgp', 'prgc', 'touches', 'carries', 'mis', 'dis', 'crdy', 'crdr', 'recov']
-GK_METRICS = ['ga', 'saves', 'save', 'cs', 'pka', 'pksv']
+# ============================================================
+# POSITION METRICS (Post-Opta: only Standard, Shooting, Keeper,
+# Playing Time, Misc tables available from FBref)
+# ============================================================
+FW_METRICS = ['gls', 'ast', 'g_a', 'xg', 'xag', 'npxg', 'sh', 'sot', 'g_sh', 'finishing_alpha', 'playmaking_alpha']
+MF_METRICS = ['gls', 'ast', 'g_a', 'xg', 'xag', 'finishing_alpha', 'playmaking_alpha', 'tklw', 'int', 'fls', 'crs']
+DF_METRICS = ['tklw', 'int', 'fls', 'fld', 'crdy', 'crs', 'gls', 'ast']
+GK_METRICS = ['ga', 'ga90', 'saves', 'savepct', 'cs', 'cspct', 'pka', 'pksv']
+
 
 @st.cache_data
 def load_data():
     return get_data()
+
 
 def get_primary_position(pos):
     if pd.isna(pos):
@@ -109,6 +96,7 @@ def get_primary_position(pos):
         return 'FW'
     return None
 
+
 def get_grade(rating):
     if rating >= 90:
         return "WORLD CLASS"
@@ -123,6 +111,7 @@ def get_grade(rating):
     else:
         return "BELOW AVERAGE"
 
+
 def get_metrics_for_position(pos):
     primary = get_primary_position(pos)
     if primary == 'GK':
@@ -133,6 +122,14 @@ def get_metrics_for_position(pos):
         return MF_METRICS
     else:
         return FW_METRICS
+
+
+def safe_val(player, col, default=0):
+    """Safely get a numeric value from player row"""
+    val = player.get(col, default)
+    if pd.isna(val):
+        return default
+    return val
 
 
 def find_similar_players(df, player_name, top_n=5):
@@ -200,10 +197,11 @@ def generate_scout_report_pdf(player, df):
     percentiles = {}
     for m in metrics:
         if m in player and m in pos_df.columns:
-            percentiles[m] = (pos_df[m] < player[m]).mean() * 100
+            val = safe_val(player, m)
+            percentiles[m] = (pos_df[m].fillna(0) < val).mean() * 100
 
     # Calculate overall rating
-    avg_pct = np.mean(list(percentiles.values()))
+    avg_pct = np.mean(list(percentiles.values())) if percentiles else 50
     rating = round(60 + avg_pct * 0.35, 1)
     grade = get_grade(rating)
 
@@ -240,8 +238,9 @@ def generate_scout_report_pdf(player, df):
     elements.append(Paragraph("Season Statistics", section_style))
     stats_data = [
         ['Matches', 'Minutes', '90s Played', 'Goals', 'Assists'],
-        [str(int(player.get('mp', 0))), str(int(player.get('min', 0))), f"{player['col_90s']:.1f}",
-         str(int(player['gls'])), str(int(player['ast']))]
+        [str(int(safe_val(player, 'mp'))), str(int(safe_val(player, 'min'))),
+         f"{safe_val(player, 'col_90s'):.1f}",
+         str(int(safe_val(player, 'gls'))), str(int(safe_val(player, 'ast')))]
     ]
     stats_table = Table(stats_data, colWidths=[100, 100, 100, 100, 100])
     stats_table.setStyle(TableStyle([
@@ -259,8 +258,9 @@ def generate_scout_report_pdf(player, df):
     # Expected stats
     exp_data = [
         ['xG', 'xAG', 'Finishing Alpha', 'Playmaking Alpha'],
-        [f"{player['xg']:.1f}", f"{player['xag']:.1f}", f"{player['finishing_alpha']:+.2f}",
-         f"{player['playmaking_alpha']:+.2f}"]
+        [f"{safe_val(player, 'xg'):.1f}", f"{safe_val(player, 'xag'):.1f}",
+         f"{safe_val(player, 'finishing_alpha'):+.2f}",
+         f"{safe_val(player, 'playmaking_alpha'):+.2f}"]
     ]
     exp_table = Table(exp_data, colWidths=[125, 125, 125, 125])
     exp_table.setStyle(TableStyle([
@@ -350,14 +350,15 @@ def generate_scout_report_pdf(player, df):
     fig, ax = plt.subplots(figsize=(6, 4))
     x = np.arange(2)
     width = 0.35
-    ax.bar(x - width / 2, [player['gls'], player['ast']], width, label='Actual', color='#3498db')
-    ax.bar(x + width / 2, [player['xg'], player['xag']], width, label='Expected', color='#e74c3c')
+    ax.bar(x - width / 2, [safe_val(player, 'gls'), safe_val(player, 'ast')], width, label='Actual', color='#3498db')
+    ax.bar(x + width / 2, [safe_val(player, 'xg'), safe_val(player, 'xag')], width, label='Expected', color='#e74c3c')
     ax.set_xticks(x)
     ax.set_xticklabels(['Goals', 'Assists'])
     ax.legend()
     ax.set_title('Actual vs Expected')
     ax.set_ylabel('Count')
-    for i, (actual, expected) in enumerate([(player['gls'], player['xg']), (player['ast'], player['xag'])]):
+    for i, (actual, expected) in enumerate([(safe_val(player, 'gls'), safe_val(player, 'xg')),
+                                             (safe_val(player, 'ast'), safe_val(player, 'xag'))]):
         ax.text(i - width / 2, actual + 0.1, f'{int(actual)}', ha='center', fontsize=9)
         ax.text(i + width / 2, expected + 0.1, f'{expected:.1f}', ha='center', fontsize=9)
     ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
@@ -372,17 +373,18 @@ def generate_scout_report_pdf(player, df):
 
     # 3. League Comparison
     league_df = df[df['comp'] == player['comp']]
-    league_avg = {m: league_df[m].mean() for m in ['gls', 'ast', 'xg', 'xag']}
+    league_avg = {m: league_df[m].mean() for m in ['gls', 'ast', 'xg', 'xag'] if m in league_df.columns}
 
     fig, ax = plt.subplots(figsize=(6, 4))
-    x = np.arange(4)
+    comp_metrics = list(league_avg.keys())
+    x = np.arange(len(comp_metrics))
     width = 0.35
-    player_vals = [player['gls'], player['ast'], player['xg'], player['xag']]
-    league_vals = [league_avg['gls'], league_avg['ast'], league_avg['xg'], league_avg['xag']]
+    player_vals = [safe_val(player, m) for m in comp_metrics]
+    league_vals = [league_avg[m] for m in comp_metrics]
     ax.bar(x - width / 2, player_vals, width, label=player['player'], color='#3498db')
     ax.bar(x + width / 2, league_vals, width, label='League Avg', color='#95a5a6')
     ax.set_xticks(x)
-    ax.set_xticklabels(['gls', 'ast', 'xg', 'xag'])
+    ax.set_xticklabels(comp_metrics)
     ax.legend()
     ax.set_title('Player vs League Average')
     ax.set_ylabel('Value')
@@ -406,6 +408,7 @@ def generate_scout_report_pdf(player, df):
 
     buffer.seek(0)
     return buffer
+
 
 def main():
     df = load_data()
@@ -445,7 +448,9 @@ def main():
     st.title("Football Alpha Analysis Dashboard")
     st.markdown("**Top 5 European Leagues | Data-Driven Insights**")
 
+    # ================================================================
     # OVERVIEW PAGE
+    # ================================================================
     if page == "Overview":
         st.header("Season Overview")
 
@@ -460,53 +465,63 @@ def main():
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("**Top 10 Scorers**")
-            st.dataframe(df.nlargest(10, 'gls')[['player', 'squad', 'gls', 'xg', 'finishing_alpha']], hide_index=True,
-                         use_container_width=True)
+            top_cols = ['player', 'squad', 'gls', 'xg', 'finishing_alpha']
+            available = [c for c in top_cols if c in df.columns]
+            st.dataframe(df.nlargest(10, 'gls')[available], hide_index=True, use_container_width=True)
         with col2:
             st.markdown("**Top 10 Assisters**")
-            st.dataframe(df.nlargest(10, 'ast')[['player', 'squad', 'ast', 'xag', 'playmaking_alpha']], hide_index=True,
-                         use_container_width=True)
+            top_cols = ['player', 'squad', 'ast', 'xag', 'playmaking_alpha']
+            available = [c for c in top_cols if c in df.columns]
+            st.dataframe(df.nlargest(10, 'ast')[available], hide_index=True, use_container_width=True)
 
-        # xG vs Goals
+        # xG vs Goals scatter
         st.markdown("---")
         st.subheader("Expected Goals vs Actual Goals")
-        fig, ax = plt.subplots(figsize=(12, 8))
-        scatter = ax.scatter(df['xg'], df['gls'], alpha=0.5, c=df['finishing_alpha'], cmap='RdYlGn', s=50)
-        plt.colorbar(scatter, label='Finishing Alpha')
-        ax.plot([0, df['xg'].max()], [0, df['xg'].max()], 'k--', label='Perfect conversion')
-        top_outliers = df.nlargest(10, 'finishing_alpha')
-        worst_outliers = df.nsmallest(10, 'finishing_alpha')
-        outliers = pd.concat([top_outliers, worst_outliers, df.nlargest(5, 'gls')]).drop_duplicates(subset='player')
-        texts = [ax.text(row['xg'], row['gls'], row['player'], fontsize=8, fontweight='bold') for _, row in
-                 outliers.iterrows()]
-        adjust_text(texts, arrowprops=dict(arrowstyle='-', color='gray', lw=0.5))
-        ax.set_xlabel('Expected Goals (xG)')
-        ax.set_ylabel('Actual Goals')
-        ax.legend()
-        ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.close()
+        plot_df = df.dropna(subset=['xg', 'gls', 'finishing_alpha'])
+        if len(plot_df) > 0:
+            fig, ax = plt.subplots(figsize=(12, 8))
+            scatter = ax.scatter(plot_df['xg'], plot_df['gls'], alpha=0.5, c=plot_df['finishing_alpha'],
+                                 cmap='RdYlGn', s=50)
+            plt.colorbar(scatter, label='Finishing Alpha')
+            ax.plot([0, plot_df['xg'].max()], [0, plot_df['xg'].max()], 'k--', label='Perfect conversion')
+            top_outliers = plot_df.nlargest(10, 'finishing_alpha')
+            worst_outliers = plot_df.nsmallest(10, 'finishing_alpha')
+            outliers = pd.concat([top_outliers, worst_outliers, plot_df.nlargest(5, 'gls')]).drop_duplicates(
+                subset='player')
+            texts = [ax.text(row['xg'], row['gls'], row['player'], fontsize=8, fontweight='bold') for _, row in
+                     outliers.iterrows()]
+            adjust_text(texts, arrowprops=dict(arrowstyle='-', color='gray', lw=0.5))
+            ax.set_xlabel('Expected Goals (xG)')
+            ax.set_ylabel('Actual Goals')
+            ax.legend()
+            ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
 
-        # xAG vs Assists
+        # xAG vs Assists scatter
         st.markdown("---")
         st.subheader("Expected Assists vs Actual Assists")
-        fig, ax = plt.subplots(figsize=(12, 8))
-        scatter = ax.scatter(df['xag'], df['ast'], alpha=0.5, c=df['playmaking_alpha'], cmap='RdYlGn', s=50)
-        plt.colorbar(scatter, label='Playmaking Alpha')
-        ax.plot([0, df['xag'].max()], [0, df['xag'].max()], 'k--', label='Perfect conversion')
-        outliers = pd.concat([df.nlargest(10, 'playmaking_alpha'), df.nsmallest(10, 'playmaking_alpha'),
-                              df.nlargest(5, 'ast')]).drop_duplicates(subset='player')
-        texts = [ax.text(row['xag'], row['ast'], row['player'], fontsize=8, fontweight='bold') for _, row in
-                 outliers.iterrows()]
-        adjust_text(texts, arrowprops=dict(arrowstyle='-', color='gray', lw=0.5))
-        ax.set_xlabel('Expected Assists (xAG)')
-        ax.set_ylabel('Actual Assists')
-        ax.legend()
-        ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.close()
+        plot_df = df.dropna(subset=['xag', 'ast', 'playmaking_alpha'])
+        if len(plot_df) > 0:
+            fig, ax = plt.subplots(figsize=(12, 8))
+            scatter = ax.scatter(plot_df['xag'], plot_df['ast'], alpha=0.5, c=plot_df['playmaking_alpha'],
+                                 cmap='RdYlGn', s=50)
+            plt.colorbar(scatter, label='Playmaking Alpha')
+            ax.plot([0, plot_df['xag'].max()], [0, plot_df['xag'].max()], 'k--', label='Perfect conversion')
+            outliers = pd.concat([plot_df.nlargest(10, 'playmaking_alpha'),
+                                  plot_df.nsmallest(10, 'playmaking_alpha'),
+                                  plot_df.nlargest(5, 'ast')]).drop_duplicates(subset='player')
+            texts = [ax.text(row['xag'], row['ast'], row['player'], fontsize=8, fontweight='bold') for _, row in
+                     outliers.iterrows()]
+            adjust_text(texts, arrowprops=dict(arrowstyle='-', color='gray', lw=0.5))
+            ax.set_xlabel('Expected Assists (xAG)')
+            ax.set_ylabel('Actual Assists')
+            ax.legend()
+            ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
 
         # Finishers
         st.markdown("---")
@@ -514,10 +529,10 @@ def main():
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("**Top 15 Clinical Finishers**")
+            top15 = df.dropna(subset=['finishing_alpha']).nlargest(15, 'finishing_alpha')
             fig, ax = plt.subplots(figsize=(10, 8))
-            top15 = df.nlargest(15, 'finishing_alpha')
-            colors = ['#2ecc71' if x > 0 else '#e74c3c' for x in top15['finishing_alpha']]
-            ax.barh(top15['player'], top15['finishing_alpha'], color=colors)
+            bar_colors = ['#2ecc71' if x > 0 else '#e74c3c' for x in top15['finishing_alpha']]
+            ax.barh(top15['player'], top15['finishing_alpha'], color=bar_colors)
             ax.set_xlabel('Finishing Alpha')
             ax.invert_yaxis()
             plt.tight_layout()
@@ -525,25 +540,26 @@ def main():
             plt.close()
         with col2:
             st.markdown("**Top 15 Underperforming**")
+            worst15 = df.dropna(subset=['finishing_alpha']).nsmallest(15, 'finishing_alpha')
             fig, ax = plt.subplots(figsize=(10, 8))
-            worst15 = df.nsmallest(15, 'finishing_alpha')
-            colors = ['#2ecc71' if x > 0 else '#e74c3c' for x in worst15['finishing_alpha']]
-            ax.barh(worst15['player'], worst15['finishing_alpha'], color=colors)
+            bar_colors = ['#2ecc71' if x > 0 else '#e74c3c' for x in worst15['finishing_alpha']]
+            ax.barh(worst15['player'], worst15['finishing_alpha'], color=bar_colors)
             ax.set_xlabel('Finishing Alpha')
             ax.invert_yaxis()
             plt.tight_layout()
             st.pyplot(fig)
             plt.close()
 
-        # League + Team Comparison
+        # League Comparison
         st.markdown("---")
         st.subheader("League Comparison")
-        league_stats = df.groupby('comp').agg({'finishing_alpha': 'mean', 'playmaking_alpha': 'mean'}).round(2)
+        league_stats = df.dropna(subset=['finishing_alpha', 'playmaking_alpha']).groupby('comp').agg(
+            {'finishing_alpha': 'mean', 'playmaking_alpha': 'mean'}).round(2)
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
         for i, (metric, title) in enumerate([('finishing_alpha', 'Finishing'), ('playmaking_alpha', 'Playmaking')]):
             order = league_stats.sort_values(metric, ascending=True).index
-            colors = ['#2ecc71' if league_stats.loc[l, metric] > 0 else '#e74c3c' for l in order]
-            axes[i].barh(order, league_stats.loc[order, metric], color=colors)
+            bar_colors = ['#2ecc71' if league_stats.loc[l, metric] > 0 else '#e74c3c' for l in order]
+            axes[i].barh(order, league_stats.loc[order, metric], color=bar_colors)
             axes[i].set_xlabel(f'Average {title} Alpha')
             axes[i].axvline(x=0, color='black', linewidth=0.5)
         plt.tight_layout()
@@ -553,16 +569,16 @@ def main():
         # Team Efficiency
         st.markdown("---")
         st.subheader("Team Efficiency")
-        team_stats = df.groupby('squad').agg({'finishing_alpha': 'mean', 'player': 'count'}).rename(
-            columns={'player': 'n'})
+        team_stats = df.dropna(subset=['finishing_alpha']).groupby('squad').agg(
+            {'finishing_alpha': 'mean', 'player': 'count'}).rename(columns={'player': 'n'})
         team_stats = team_stats[team_stats['n'] >= 5]
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("**Most Clinical Teams**")
             fig, ax = plt.subplots(figsize=(10, 8))
             top_teams = team_stats.nlargest(15, 'finishing_alpha')
-            colors = ['#2ecc71' if x > 0 else '#e74c3c' for x in top_teams['finishing_alpha']]
-            ax.barh(top_teams.index, top_teams['finishing_alpha'], color=colors)
+            bar_colors = ['#2ecc71' if x > 0 else '#e74c3c' for x in top_teams['finishing_alpha']]
+            ax.barh(top_teams.index, top_teams['finishing_alpha'], color=bar_colors)
             ax.invert_yaxis()
             plt.tight_layout()
             st.pyplot(fig)
@@ -571,18 +587,21 @@ def main():
             st.markdown("**Least Clinical Teams**")
             fig, ax = plt.subplots(figsize=(10, 8))
             worst_teams = team_stats.nsmallest(15, 'finishing_alpha')
-            colors = ['#2ecc71' if x > 0 else '#e74c3c' for x in worst_teams['finishing_alpha']]
-            ax.barh(worst_teams.index, worst_teams['finishing_alpha'], color=colors)
+            bar_colors = ['#2ecc71' if x > 0 else '#e74c3c' for x in worst_teams['finishing_alpha']]
+            ax.barh(worst_teams.index, worst_teams['finishing_alpha'], color=bar_colors)
             ax.invert_yaxis()
             plt.tight_layout()
             st.pyplot(fig)
             plt.close()
 
+    # ================================================================
     # PLAYER SEARCH PAGE
+    # ================================================================
     elif page == "Player Search":
         st.header("Player Search")
         players = sorted(df['player'].tolist())
-        selected_player = st.selectbox("Search player", options=players, index=None, placeholder="Type player name...")
+        selected_player = st.selectbox("Search player", options=players, index=None,
+                                       placeholder="Type player name...")
 
         if selected_player:
             player = df[df['player'] == selected_player].iloc[0]
@@ -594,22 +613,31 @@ def main():
             col1.metric("Position", player['pos'])
             col2.metric("Age", int(player['age']))
             col3.metric("League", player['comp'])
-            col4.metric("90s Played", f"{player['col_90s']:.1f}")
+            col4.metric("90s Played", f"{safe_val(player, 'col_90s'):.1f}")
 
             st.markdown("---")
             col1, col2, col3 = st.columns(3)
-            col1.metric("Goals", int(player['gls']))
-            col2.metric("Assists", int(player['ast']))
-            col3.metric("G+A", int(player['gls'] + player['ast']))
+            col1.metric("Goals", int(safe_val(player, 'gls')))
+            col2.metric("Assists", int(safe_val(player, 'ast')))
+            col3.metric("G+A", int(safe_val(player, 'gls') + safe_val(player, 'ast')))
 
             col1, col2, col3 = st.columns(3)
-            col1.metric("xG", f"{player['xg']:.1f}")
-            col2.metric("xAG", f"{player['xag']:.1f}")
-            col3.metric("xG+xAG", f"{player['xg'] + player['xag']:.1f}")
+            col1.metric("xG", f"{safe_val(player, 'xg'):.1f}")
+            col2.metric("xAG", f"{safe_val(player, 'xag'):.1f}")
+            col3.metric("xG+xAG", f"{safe_val(player, 'xg') + safe_val(player, 'xag'):.1f}")
 
             col1, col2 = st.columns(2)
-            col1.metric("Finishing Alpha", f"{player['finishing_alpha']:+.2f}")
-            col2.metric("Playmaking Alpha", f"{player['playmaking_alpha']:+.2f}")
+            col1.metric("Finishing Alpha", f"{safe_val(player, 'finishing_alpha'):+.2f}")
+            col2.metric("Playmaking Alpha", f"{safe_val(player, 'playmaking_alpha'):+.2f}")
+
+            # Shooting stats
+            st.markdown("---")
+            st.subheader("Shooting")
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Shots", int(safe_val(player, 'sh')))
+            col2.metric("Shots on Target", int(safe_val(player, 'sot')))
+            col3.metric("SoT%", f"{safe_val(player, 'sotpct'):.1f}%")
+            col4.metric("Goals/Shot", f"{safe_val(player, 'g_sh'):.2f}")
 
             # SIMILAR PLAYERS
             st.markdown("---")
@@ -630,7 +658,7 @@ def main():
                 angles += angles[:1]
 
                 # Original player
-                vals = [(player[m] / max_vals[m] * 100) if max_vals[m] != 0 else 0 for m in available]
+                vals = [(safe_val(player, m) / max_vals[m] * 100) if max_vals[m] != 0 else 0 for m in available]
                 vals += vals[:1]
                 ax.plot(angles, vals, 'o-', linewidth=2, label=player['player'], color='#3498db')
                 ax.fill(angles, vals, alpha=0.25, color='#3498db')
@@ -638,7 +666,8 @@ def main():
                 # Top similar
                 if similar:
                     sim_player = df[df['player'] == similar[0]['player']].iloc[0]
-                    vals2 = [(sim_player[m] / max_vals[m] * 100) if max_vals[m] != 0 else 0 for m in available]
+                    vals2 = [(safe_val(sim_player, m) / max_vals[m] * 100) if max_vals[m] != 0 else 0 for m in
+                             available]
                     vals2 += vals2[:1]
                     ax.plot(angles, vals2, 'o-', linewidth=2,
                             label=f"{similar[0]['player']} ({similar[0]['similarity']}%)", color='#e74c3c')
@@ -650,11 +679,14 @@ def main():
                 st.pyplot(fig)
                 plt.close()
 
+    # ================================================================
     # SCOUT REPORT PAGE
+    # ================================================================
     elif page == "Scout Report":
         st.header("Scout Report")
         players = sorted(df['player'].tolist())
-        selected_player = st.selectbox("Select player", options=players, index=None, placeholder="Type player name...")
+        selected_player = st.selectbox("Select player", options=players, index=None,
+                                       placeholder="Type player name...")
 
         if selected_player:
             player = df[df['player'] == selected_player].iloc[0]
@@ -680,14 +712,14 @@ def main():
             st.markdown("---")
             st.subheader("Season Statistics")
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Goals", int(player['gls']))
-            col2.metric("xG", f"{player['xg']:.1f}")
-            col3.metric("Assists", int(player['ast']))
-            col4.metric("xAG", f"{player['xag']:.1f}")
+            col1.metric("Goals", int(safe_val(player, 'gls')))
+            col2.metric("xG", f"{safe_val(player, 'xg'):.1f}")
+            col3.metric("Assists", int(safe_val(player, 'ast')))
+            col4.metric("xAG", f"{safe_val(player, 'xag'):.1f}")
 
             col1, col2 = st.columns(2)
-            fa = player['finishing_alpha']
-            pa = player['playmaking_alpha']
+            fa = safe_val(player, 'finishing_alpha')
+            pa = safe_val(player, 'playmaking_alpha')
 
             col1.metric("Finishing Alpha", f"{fa:+.2f}")
             if fa >= 0:
@@ -714,12 +746,13 @@ def main():
 
             ranking_data = []
             for metric in ['gls', 'ast', 'xg', 'xag', 'finishing_alpha', 'playmaking_alpha']:
-                val = player[metric]
-                pct = (pos_df[metric] < val).mean() * 100
-                rating = round(60 + pct * 0.35, 1)
-                ranking_data.append(
-                    {'Metric': metric, 'Value': f"{val:.1f}", 'Percentile': f"{pct:.0f}%", 'Rating': rating,
-                     'Grade': get_grade(rating)})
+                if metric in df.columns:
+                    val = safe_val(player, metric)
+                    pct = (pos_df[metric].fillna(0) < val).mean() * 100
+                    rating = round(60 + pct * 0.35, 1)
+                    ranking_data.append(
+                        {'Metric': metric, 'Value': f"{val:.1f}", 'Percentile': f"{pct:.0f}%", 'Rating': rating,
+                         'Grade': get_grade(rating)})
 
             st.dataframe(pd.DataFrame(ranking_data), hide_index=True, use_container_width=True)
 
@@ -731,8 +764,10 @@ def main():
                 st.markdown("**Actual vs Expected**")
                 fig, ax = plt.subplots(figsize=(8, 5))
                 x = np.arange(2)
-                ax.bar(x - 0.2, [player['gls'], player['ast']], 0.4, label='Actual', color='#3498db')
-                ax.bar(x + 0.2, [player['xg'], player['xag']], 0.4, label='Expected', color='#e74c3c')
+                ax.bar(x - 0.2, [safe_val(player, 'gls'), safe_val(player, 'ast')], 0.4, label='Actual',
+                       color='#3498db')
+                ax.bar(x + 0.2, [safe_val(player, 'xg'), safe_val(player, 'xag')], 0.4, label='Expected',
+                       color='#e74c3c')
                 ax.set_xticks(x)
                 ax.set_xticklabels(['Goals', 'Assists'])
                 ax.legend()
@@ -744,21 +779,24 @@ def main():
             with col2:
                 st.markdown("**Percentile Radar**")
                 fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
-                metrics = ['gls', 'ast', 'xg', 'xag', 'finishing_alpha', 'playmaking_alpha']
-                pcts = [(pos_df[m] < player[m]).mean() * 100 for m in metrics]
-                angles = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False).tolist()
+                radar_metrics = ['gls', 'ast', 'xg', 'xag', 'finishing_alpha', 'playmaking_alpha']
+                available_radar = [m for m in radar_metrics if m in df.columns]
+                pcts = [(pos_df[m].fillna(0) < safe_val(player, m)).mean() * 100 for m in available_radar]
+                angles = np.linspace(0, 2 * np.pi, len(available_radar), endpoint=False).tolist()
                 pcts += pcts[:1]
                 angles += angles[:1]
                 ax.plot(angles, pcts, 'o-', linewidth=2, color='#3498db')
                 ax.fill(angles, pcts, alpha=0.25, color='#3498db')
                 ax.plot(angles, [50] * len(angles), '--', color='gray', alpha=0.5)
                 ax.set_xticks(angles[:-1])
-                ax.set_xticklabels(metrics)
+                ax.set_xticklabels(available_radar)
                 ax.set_ylim(0, 100)
                 st.pyplot(fig)
                 plt.close()
 
+    # ================================================================
     # PLAYER COMPARISON PAGE
+    # ================================================================
     elif page == "Player Comparison":
         st.header("Player Comparison")
         players = sorted(df['player'].tolist())
@@ -787,16 +825,16 @@ def main():
             # Bar Chart
             st.markdown("---")
             st.subheader("Metric Comparison")
-            metrics = ['gls', 'ast', 'xg', 'xag', 'finishing_alpha', 'playmaking_alpha']
+            comp_metrics = ['gls', 'ast', 'xg', 'xag', 'finishing_alpha', 'playmaking_alpha']
             fig, ax = plt.subplots(figsize=(12, 6))
-            x = np.arange(len(metrics))
+            x = np.arange(len(comp_metrics))
             width = 0.35
-            vals1 = [p1[m] if pd.notna(p1[m]) else 0 for m in metrics]
-            vals2 = [p2[m] if pd.notna(p2[m]) else 0 for m in metrics]
+            vals1 = [safe_val(p1, m) for m in comp_metrics]
+            vals2 = [safe_val(p2, m) for m in comp_metrics]
             ax.bar(x - width / 2, vals1, width, label=player1, color='#3498db')
             ax.bar(x + width / 2, vals2, width, label=player2, color='#e74c3c')
             ax.set_xticks(x)
-            ax.set_xticklabels(metrics, rotation=45, ha='right')
+            ax.set_xticklabels(comp_metrics, rotation=45, ha='right')
             ax.legend()
             plt.tight_layout()
             st.pyplot(fig)
@@ -806,10 +844,12 @@ def main():
             st.markdown("---")
             st.subheader("Radar Comparison")
             fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
-            max_vals = {m: df[m].max() for m in metrics}
-            vals1_norm = [(p1[m] / max_vals[m] * 100) if max_vals[m] != 0 else 0 for m in metrics]
-            vals2_norm = [(p2[m] / max_vals[m] * 100) if max_vals[m] != 0 else 0 for m in metrics]
-            angles = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False).tolist()
+            max_vals = {m: df[m].max() for m in comp_metrics if m in df.columns}
+            vals1_norm = [(safe_val(p1, m) / max_vals[m] * 100) if max_vals.get(m, 0) != 0 else 0 for m in
+                          comp_metrics]
+            vals2_norm = [(safe_val(p2, m) / max_vals[m] * 100) if max_vals.get(m, 0) != 0 else 0 for m in
+                          comp_metrics]
+            angles = np.linspace(0, 2 * np.pi, len(comp_metrics), endpoint=False).tolist()
             vals1_norm += vals1_norm[:1]
             vals2_norm += vals2_norm[:1]
             angles += angles[:1]
@@ -818,20 +858,20 @@ def main():
             ax.plot(angles, vals2_norm, 'o-', linewidth=2, label=player2, color='#e74c3c')
             ax.fill(angles, vals2_norm, alpha=0.25, color='#e74c3c')
             ax.set_xticks(angles[:-1])
-            ax.set_xticklabels(metrics)
+            ax.set_xticklabels(comp_metrics)
             ax.legend(loc='upper right')
             st.pyplot(fig)
             plt.close()
 
-            # Category Charts
+            # Category Charts (updated for post-Opta columns)
             st.markdown("---")
             st.subheader("Category Breakdown")
 
             categories = {
                 'Attacking': ['gls', 'ast', 'g_a', 'xg', 'xag'],
-                'Passing': ['prgp', 'prgc', 'kp', 'ppa'],
-                'Possession': ['touches', 'carries', 'prgr'],
-                'Defensive': ['tkl', 'tklw', 'int', 'blocks']
+                'Shooting': ['sh', 'sot', 'g_sh', 'g_sot'],
+                'Defensive': ['tklw', 'int', 'fls', 'fld'],
+                'Alpha': ['finishing_alpha', 'playmaking_alpha', 'npxg', 'xgchain'],
             }
 
             for cat_name, cat_metrics in categories.items():
@@ -841,8 +881,8 @@ def main():
                     fig, ax = plt.subplots(figsize=(10, 4))
                     x = np.arange(len(available))
                     width = 0.35
-                    v1 = [p1[m] if m in p1 and pd.notna(p1[m]) else 0 for m in available]
-                    v2 = [p2[m] if m in p2 and pd.notna(p2[m]) else 0 for m in available]
+                    v1 = [safe_val(p1, m) for m in available]
+                    v2 = [safe_val(p2, m) for m in available]
                     ax.bar(x - width / 2, v1, width, label=player1, color='#3498db')
                     ax.bar(x + width / 2, v2, width, label=player2, color='#e74c3c')
                     ax.set_xticks(x)
@@ -853,7 +893,9 @@ def main():
                     st.pyplot(fig)
                     plt.close()
 
+    # ================================================================
     # TEAM ANALYSIS PAGE
+    # ================================================================
     elif page == "Team Analysis":
         st.header("Team Analysis")
         teams = sorted(df['squad'].unique().tolist())
@@ -870,44 +912,51 @@ def main():
             col4.metric("Avg Age", f"{team_df['age'].mean():.1f}")
 
             col1, col2 = st.columns(2)
-            col1.metric("Team Finishing Alpha", f"{team_df['finishing_alpha'].sum():+.2f}")
-            col2.metric("Team Playmaking Alpha", f"{team_df['playmaking_alpha'].sum():+.2f}")
+            fa_sum = team_df['finishing_alpha'].sum() if 'finishing_alpha' in team_df.columns else 0
+            pa_sum = team_df['playmaking_alpha'].sum() if 'playmaking_alpha' in team_df.columns else 0
+            col1.metric("Team Finishing Alpha", f"{fa_sum:+.2f}")
+            col2.metric("Team Playmaking Alpha", f"{pa_sum:+.2f}")
 
             # Squad Table
             st.markdown("---")
             st.subheader("Squad")
-            st.dataframe(team_df[['player', 'pos', 'age', 'gls', 'ast', 'xg', 'finishing_alpha']].sort_values('gls',
-                                                                                                              ascending=False),
+            squad_cols = ['player', 'pos', 'age', 'gls', 'ast', 'xg', 'finishing_alpha']
+            available = [c for c in squad_cols if c in team_df.columns]
+            st.dataframe(team_df[available].sort_values('gls', ascending=False),
                          hide_index=True, use_container_width=True)
 
             # Goals vs xG
             st.markdown("---")
             st.subheader("Goals vs xG")
-            fig, ax = plt.subplots(figsize=(12, 8))
-            sorted_df = team_df.sort_values('gls', ascending=True)
-            y_pos = np.arange(len(sorted_df))
-            ax.barh(y_pos, sorted_df['gls'], height=0.4, label='Goals', color='#3498db')
-            ax.barh(y_pos + 0.4, sorted_df['xg'], height=0.4, label='xG', color='#e74c3c', alpha=0.7)
-            ax.set_yticks(y_pos + 0.2)
-            ax.set_yticklabels(sorted_df['player'])
-            ax.legend()
-            ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
-            plt.tight_layout()
-            st.pyplot(fig)
-            plt.close()
+            plot_team = team_df.dropna(subset=['xg']).copy()
+            if len(plot_team) > 0:
+                fig, ax = plt.subplots(figsize=(12, 8))
+                sorted_df = plot_team.sort_values('gls', ascending=True)
+                y_pos = np.arange(len(sorted_df))
+                ax.barh(y_pos, sorted_df['gls'], height=0.4, label='Goals', color='#3498db')
+                ax.barh(y_pos + 0.4, sorted_df['xg'], height=0.4, label='xG', color='#e74c3c', alpha=0.7)
+                ax.set_yticks(y_pos + 0.2)
+                ax.set_yticklabels(sorted_df['player'])
+                ax.legend()
+                ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
 
             # Finishing Alpha
             st.markdown("---")
             st.subheader("Finishing Alpha by Player")
-            fig, ax = plt.subplots(figsize=(12, 8))
-            sorted_df = team_df.sort_values('finishing_alpha', ascending=True)
-            colors = ['#2ecc71' if x > 0 else '#e74c3c' for x in sorted_df['finishing_alpha']]
-            ax.barh(sorted_df['player'], sorted_df['finishing_alpha'], color=colors)
-            ax.axvline(x=0, color='black', linewidth=0.5)
-            ax.set_xlabel('Finishing Alpha')
-            plt.tight_layout()
-            st.pyplot(fig)
-            plt.close()
+            plot_team = team_df.dropna(subset=['finishing_alpha']).copy()
+            if len(plot_team) > 0:
+                fig, ax = plt.subplots(figsize=(12, 8))
+                sorted_df = plot_team.sort_values('finishing_alpha', ascending=True)
+                bar_colors = ['#2ecc71' if x > 0 else '#e74c3c' for x in sorted_df['finishing_alpha']]
+                ax.barh(sorted_df['player'], sorted_df['finishing_alpha'], color=bar_colors)
+                ax.axvline(x=0, color='black', linewidth=0.5)
+                ax.set_xlabel('Finishing Alpha')
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
 
             # Squad Composition & Goal Contributions
             st.markdown("---")
@@ -931,7 +980,8 @@ def main():
 
                 pos_counts = team_df['pos'].apply(get_pos).value_counts()
                 fig, ax = plt.subplots(figsize=(8, 8))
-                colors_pie = {'GK': '#9b59b6', 'DF': '#3498db', 'MF': '#2ecc71', 'FW': '#e74c3c', 'Unknown': '#95a5a6'}
+                colors_pie = {'GK': '#9b59b6', 'DF': '#3498db', 'MF': '#2ecc71', 'FW': '#e74c3c',
+                              'Unknown': '#95a5a6'}
                 ax.pie(pos_counts.values, labels=pos_counts.index, autopct='%1.0f%%',
                        colors=[colors_pie.get(p, '#95a5a6') for p in pos_counts.index])
                 plt.tight_layout()
@@ -942,10 +992,11 @@ def main():
                 st.subheader("Goal Contributions")
                 fig, ax = plt.subplots(figsize=(10, 8))
                 sorted_df = team_df.copy()
-                sorted_df['g_a'] = sorted_df['gls'] + sorted_df['ast']
-                sorted_df = sorted_df.sort_values('g_a', ascending=True)
+                sorted_df['g_a_calc'] = sorted_df['gls'] + sorted_df['ast']
+                sorted_df = sorted_df.sort_values('g_a_calc', ascending=True)
                 ax.barh(sorted_df['player'], sorted_df['gls'], label='Goals', color='#3498db')
-                ax.barh(sorted_df['player'], sorted_df['ast'], left=sorted_df['gls'], label='Assists', color='#2ecc71')
+                ax.barh(sorted_df['player'], sorted_df['ast'], left=sorted_df['gls'], label='Assists',
+                        color='#2ecc71')
                 ax.legend()
                 ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
                 plt.tight_layout()
@@ -956,12 +1007,15 @@ def main():
             st.markdown("---")
             st.subheader("League Comparison")
             league_df = df[df['comp'] == league]
-            team_avg = {'Goals/Player': team_df['gls'].mean(), 'Assists/Player': team_df['ast'].mean(),
-                        'Finishing Alpha': team_df['finishing_alpha'].mean(),
-                        'Playmaking Alpha': team_df['playmaking_alpha'].mean()}
-            league_avg = {'Goals/Player': league_df['gls'].mean(), 'Assists/Player': league_df['ast'].mean(),
-                          'Finishing Alpha': league_df['finishing_alpha'].mean(),
-                          'Playmaking Alpha': league_df['playmaking_alpha'].mean()}
+            team_avg = {'Goals/Player': team_df['gls'].mean(), 'Assists/Player': team_df['ast'].mean()}
+            league_avg = {'Goals/Player': league_df['gls'].mean(), 'Assists/Player': league_df['ast'].mean()}
+
+            if 'finishing_alpha' in team_df.columns:
+                team_avg['Finishing Alpha'] = team_df['finishing_alpha'].mean()
+                league_avg['Finishing Alpha'] = league_df['finishing_alpha'].mean()
+            if 'playmaking_alpha' in team_df.columns:
+                team_avg['Playmaking Alpha'] = team_df['playmaking_alpha'].mean()
+                league_avg['Playmaking Alpha'] = league_df['playmaking_alpha'].mean()
 
             fig, ax = plt.subplots(figsize=(12, 6))
             x = np.arange(len(team_avg))
@@ -980,8 +1034,8 @@ def main():
             st.markdown("---")
             st.subheader("Top 5 Players Radar")
             team_df_copy = team_df.copy()
-            team_df_copy['g_a'] = team_df_copy['gls'] + team_df_copy['ast']
-            top5 = team_df_copy.nlargest(5, 'g_a')
+            team_df_copy['g_a_calc'] = team_df_copy['gls'] + team_df_copy['ast']
+            top5 = team_df_copy.nlargest(5, 'g_a_calc')
 
             if len(top5) >= 3:
                 fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
@@ -990,22 +1044,23 @@ def main():
                 max_vals = {m: team_df_copy[m].max() for m in available}
                 angles = np.linspace(0, 2 * np.pi, len(available), endpoint=False).tolist()
                 angles += angles[:1]
-                colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6']
+                chart_colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6']
 
-                for i, (_, player) in enumerate(top5.iterrows()):
+                for i, (_, p) in enumerate(top5.iterrows()):
                     vals = []
                     for m in available:
                         max_val = max_vals[m] if max_vals[m] != 0 else 1
                         if 'alpha' in m:
                             min_val = team_df_copy[m].min()
                             range_val = max_val - min_val if max_val != min_val else 1
-                            normalized = (player[m] - min_val) / range_val * 100
+                            normalized = (safe_val(p, m) - min_val) / range_val * 100
                         else:
-                            normalized = (player[m] / max_val) * 100
+                            normalized = (safe_val(p, m) / max_val) * 100
                         vals.append(normalized)
                     vals += vals[:1]
-                    ax.plot(angles, vals, 'o-', linewidth=2, label=player['player'], color=colors[i % len(colors)])
-                    ax.fill(angles, vals, alpha=0.1, color=colors[i % len(colors)])
+                    ax.plot(angles, vals, 'o-', linewidth=2, label=p['player'],
+                            color=chart_colors[i % len(chart_colors)])
+                    ax.fill(angles, vals, alpha=0.1, color=chart_colors[i % len(chart_colors)])
 
                 ax.set_xticks(angles[:-1])
                 ax.set_xticklabels(available)
@@ -1014,7 +1069,9 @@ def main():
                 st.pyplot(fig)
                 plt.close()
 
-# RANKINGS PAGE
+    # ================================================================
+    # RANKINGS PAGE
+    # ================================================================
     elif page == "Rankings":
         st.header("Player Rankings")
         col1, col2 = st.columns(2)
@@ -1035,32 +1092,48 @@ def main():
         if league != 'All':
             pos_df = pos_df[pos_df['comp'] == league]
 
+        # Scoring formulas (post-Opta: adjusted for available columns)
         if position == 'FW':
-            pos_df['score'] = pos_df['gls'].rank(pct=True) * 30 + pos_df['xg'].rank(pct=True) * 20 + pos_df['finishing_alpha'].rank(pct=True) * 30 + pos_df['ast'].rank(pct=True) * 20
+            pos_df['score'] = (pos_df['gls'].rank(pct=True) * 30 +
+                               pos_df['xg'].rank(pct=True) * 20 +
+                               pos_df['finishing_alpha'].rank(pct=True) * 30 +
+                               pos_df['ast'].rank(pct=True) * 20)
         elif position == 'MF':
-            pos_df['score'] = pos_df['gls'].rank(pct=True) * 15 + pos_df['ast'].rank(pct=True) * 25 + pos_df['playmaking_alpha'].rank(pct=True) * 30 + pos_df['xag'].rank(pct=True) * 30
+            pos_df['score'] = (pos_df['gls'].rank(pct=True) * 15 +
+                               pos_df['ast'].rank(pct=True) * 25 +
+                               pos_df['playmaking_alpha'].rank(pct=True) * 30 +
+                               pos_df['xag'].rank(pct=True) * 30)
         elif position == 'DF':
-            pos_df['score'] = pos_df['tkl'].rank(pct=True) * 30 + pos_df['int'].rank(pct=True) * 30 + pos_df['clr'].rank(pct=True) * 20 + pos_df['blocks'].rank(pct=True) * 20
+            # Post-Opta: tkl, blocks, clr unavailable → use tklw, int, fld
+            pos_df['score'] = (pos_df['tklw'].rank(pct=True) * 35 +
+                               pos_df['int'].rank(pct=True) * 35 +
+                               pos_df['fld'].rank(pct=True) * 30)
         else:
-            pos_df['score'] = pos_df['saves'].rank(pct=True) * 40 + pos_df['cs'].rank(pct=True) * 40 + (1 - pos_df['ga'].rank(pct=True)) * 20
+            pos_df['score'] = (pos_df['saves'].rank(pct=True) * 40 +
+                               pos_df['cs'].rank(pct=True) * 40 +
+                               (1 - pos_df['ga'].rank(pct=True)) * 20)
 
         pos_df['rating'] = (60 + pos_df['score'] * 0.35).clip(60, 95).round(1)
         pos_df['grade'] = pos_df['rating'].apply(get_grade)
         top20 = pos_df.nlargest(20, 'rating')
 
         st.markdown("---")
-        st.dataframe(top20[['player', 'squad', 'comp', 'age', 'rating', 'grade']], hide_index=True, use_container_width=True)
+        st.dataframe(top20[['player', 'squad', 'comp', 'age', 'rating', 'grade']], hide_index=True,
+                     use_container_width=True)
 
         fig, ax = plt.subplots(figsize=(10, 8))
-        colors = ['#27ae60' if r >= 90 else '#2ecc71' if r >= 85 else '#3498db' if r >= 80 else '#f39c12' for r in top20['rating']]
-        ax.barh(top20['player'], top20['rating'], color=colors)
+        bar_colors = ['#27ae60' if r >= 90 else '#2ecc71' if r >= 85 else '#3498db' if r >= 80 else '#f39c12' for r
+                      in top20['rating']]
+        ax.barh(top20['player'], top20['rating'], color=bar_colors)
         ax.set_xlim(60, 100)
         ax.invert_yaxis()
         plt.tight_layout()
         st.pyplot(fig)
         plt.close()
 
+    # ================================================================
     # TRANSFER FINDER PAGE
+    # ================================================================
     elif page == "Transfer Finder":
         st.header("Transfer Finder")
         col1, col2 = st.columns(2)
@@ -1092,24 +1165,34 @@ def main():
             if exclude_team:
                 candidates = candidates[candidates['squad'] != team]
 
+            # Scoring (post-Opta: adjusted for available columns)
             if position == 'FW':
-                candidates['score'] = candidates['gls'].rank(pct=True) * 30 + candidates['finishing_alpha'].rank(pct=True) * 40 + candidates['xg'].rank(pct=True) * 30
+                candidates['score'] = (candidates['gls'].rank(pct=True) * 30 +
+                                       candidates['finishing_alpha'].rank(pct=True) * 40 +
+                                       candidates['xg'].rank(pct=True) * 30)
             elif position == 'MF':
-                candidates['score'] = candidates['ast'].rank(pct=True) * 30 + candidates['playmaking_alpha'].rank(pct=True) * 40 + candidates['xag'].rank(pct=True) * 30
+                candidates['score'] = (candidates['ast'].rank(pct=True) * 30 +
+                                       candidates['playmaking_alpha'].rank(pct=True) * 40 +
+                                       candidates['xag'].rank(pct=True) * 30)
             elif position == 'DF':
-                candidates['score'] = candidates['tkl'].rank(pct=True) * 35 + candidates['int'].rank(pct=True) * 35 + candidates['clr'].rank(pct=True) * 30
+                candidates['score'] = (candidates['tklw'].rank(pct=True) * 35 +
+                                       candidates['int'].rank(pct=True) * 35 +
+                                       candidates['fld'].rank(pct=True) * 30)
             else:
-                candidates['score'] = candidates['saves'].rank(pct=True) * 50 + candidates['cs'].rank(pct=True) * 50
+                candidates['score'] = (candidates['saves'].rank(pct=True) * 50 +
+                                       candidates['cs'].rank(pct=True) * 50)
 
             candidates['rating'] = (60 + candidates['score'] * 0.35).clip(60, 95).round(1)
             top10 = candidates.nlargest(10, 'rating')
 
             st.markdown("---")
-            st.dataframe(top10[['player', 'squad', 'comp', 'age', 'gls', 'ast', 'rating']], hide_index=True, use_container_width=True)
+            display_cols = ['player', 'squad', 'comp', 'age', 'gls', 'ast', 'rating']
+            available = [c for c in display_cols if c in top10.columns]
+            st.dataframe(top10[available], hide_index=True, use_container_width=True)
 
             fig, ax = plt.subplots(figsize=(10, 6))
-            colors = ['#3498db' if r >= 80 else '#f39c12' for r in top10['rating']]
-            ax.barh(top10['player'], top10['rating'], color=colors)
+            bar_colors = ['#3498db' if r >= 80 else '#f39c12' for r in top10['rating']]
+            ax.barh(top10['player'], top10['rating'], color=bar_colors)
             ax.set_xlim(60, 100)
             ax.invert_yaxis()
             plt.tight_layout()
