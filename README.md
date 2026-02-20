@@ -1,6 +1,6 @@
 # Football Alpha Analysis
 
-Data-driven football analytics platform analyzing player performance across Europe's Top 5 leagues using expected goals (xG) metrics and cloud infrastructure.
+Data-driven football analytics platform analyzing player performance across Europe's Top 5 leagues using a dual-source data pipeline (FBref + Understat) and cloud infrastructure.
 
 **[Live Dashboard](https://football-alpha-analysis-dorukyildiz.streamlit.app/)**
 
@@ -8,14 +8,15 @@ Data-driven football analytics platform analyzing player performance across Euro
 
 ## Overview
 
-This project calculates "Alpha" metrics - the difference between actual performance and expected performance - to identify overperforming and underperforming players in the 2025-26 season.
+This project calculates "Alpha" metrics — borrowed from quantitative finance — to identify overperforming and underperforming players in the 2025-26 season.
 
 | Metric | Formula | Meaning |
 |--------|---------|---------|
 | Finishing Alpha | Goals - xG | Shot conversion efficiency |
 | Playmaking Alpha | Assists - xAG | Chance creation efficiency |
+| Alpha per 90 | Finishing Alpha / 90s | Rate-adjusted outperformance |
 
-**Positive Alpha** = Overperforming expectations  
+**Positive Alpha** = Overperforming expectations
 **Negative Alpha** = Underperforming expectations
 
 ---
@@ -24,49 +25,62 @@ This project calculates "Alpha" metrics - the difference between actual performa
 
 | Category | Technologies |
 |----------|-------------|
+| Data Sources | FBref (76 columns), Understat (10 xG columns) |
 | Cloud | AWS S3, AWS Athena |
 | Backend | Python, Pandas, NumPy, Scikit-learn |
+| Scraping | Playwright (Understat), undetected-chromedriver (FBref) |
 | Visualization | Matplotlib, Seaborn, adjustText |
 | Dashboard | Streamlit |
 | PDF Generation | ReportLab |
 | Data Query | PyAthena (SQL) |
+| CI/CD | GitHub Actions (weekly automated updates) |
 
 ---
 
 ## Features
 
-| Feature | Description                                                      |
-|---------|------------------------------------------------------------------|
-| **Overview** | Season stats, xG vs Goals scatter, league comparison charts      |
-| **Player Search** | Search similar players (cosine similarity)                       |
-| **Scout Report** | PDF reports with percentile rankings and charts                  |
-| **Player Comparison** | Side-by-side comparison with radar charts and category breakdowns |
-| **Team Analysis** | Squad analysis, composition pie chart, Goals vs xG, league comparison |
-| **Rankings** | Position-based ratings                                           |
-| **Transfer Finder** | Find transfer targets filtered by position, age, and team        |
+| Feature | Description |
+|---------|-------------|
+| **Overview** | Season stats, xG vs Goals scatter, league comparison charts |
+| **Player Search** | Find similar players using cosine similarity |
+| **Scout Report** | PDF reports with percentile rankings and radar charts |
+| **Player Comparison** | Side-by-side comparison with category breakdowns |
+| **Team Analysis** | Squad analysis, composition, Goals vs xG, league comparison |
+| **Rankings** | Position-based player ratings |
+| **Transfer Finder** | Transfer targets filtered by position, age, and team |
 
 ---
 
 ## Project Structure
+
 ```
 football-alpha-analysis/
 ├── src/
 │   ├── analysis.py                 # AWS Athena data pipeline
-│   ├── visualization.py            # 10 chart types
-│   ├── similarity.py               # Player similarity engine
+│   ├── visualization.py            # Chart types
+│   ├── similarity.py               # Player similarity engine (cosine similarity)
 │   ├── comparison.py               # Player comparison
 │   ├── team_analysis.py            # Team analytics
 │   ├── scout_report.py             # PDF report generation
 │   ├── player_ranking.py           # Position-based rankings
-│   ├── transfer_recommendation.py  # Transfer targets
+│   ├── transfer_recommendation.py  # Transfer target finder
+│   ├── generate_athena_sql.py      # Athena table DDL generator
 │   └── dashboard.py                # Streamlit web app
+├── scraper/
+│   ├── fbref_scraper.py            # FBref scraper (undetected-chromedriver)
+│   ├── understat_scraper.py        # Understat scraper (Playwright)
+│   ├── merge_data.py               # 3-step merge (exact + name + last-name)
+│   ├── upload_to_s3.py             # S3 upload (merged/ + raw/)
+│   └── run_pipeline.py             # Full pipeline runner
 ├── notebooks/
 │   ├── 01_EDA.ipynb                # Exploratory Data Analysis
 │   ├── 02_Alpha_Analysis.ipynb     # Alpha metrics deep dive
 │   ├── 03_Player_Similarity.ipynb  # ML similarity algorithm
 │   └── 04_Visualizations.ipynb     # Chart gallery
-├── data/
-├── outputs/
+├── .github/
+│   └── workflows/
+│       └── update_data.yml         # Weekly automated data refresh
+├── data/                           # Local data (gitignored)
 ├── requirements.txt
 └── README.md
 ```
@@ -74,17 +88,59 @@ football-alpha-analysis/
 ---
 
 ## Data Pipeline
+
 ```
-Kaggle Dataset → AWS S3 → AWS Athena → PyAthena → Pandas → Streamlit
+FBref ──(scrape)──┐
+                   ├──(merge)──> players_data.csv ──> S3 (merged/) ──> Athena ──> Streamlit
+Understat ─(scrape)┘
 ```
 
-- **Source:** 2,341 players from Top 5 European Leagues
-- **Filtered:** 1,369 players with 5+ 90s played
-- **Features:** 200+ statistical columns
+### Data Sources
+
+| Source | Data | Columns |
+|--------|------|---------|
+| FBref | Standard, Shooting, Keeper, Playing Time, Misc | 76 |
+| Understat | xG, xA, npxG, xGChain, xGBuildup, shots, key passes, NPG | 10 |
+| Computed | Finishing Alpha, Playmaking Alpha, per-90 metrics | 7 |
+
+### Merge Process
+
+The merge pipeline matches players across FBref and Understat using a 3-step approach:
+
+1. **Exact match** — normalized name + team
+2. **Name-only match** — for players with team name mismatches
+3. **Last-name + team match** — for transliteration differences
+
+Result: **95%+ xG match rate** across 2,600+ players.
+
+### S3 Structure
+
+```
+s3://football-alpha-analysis-doruk/
+├── merged/          ← Athena reads from here
+│   └── players_data.csv
+├── raw/             ← Source files
+│   ├── fbref_players.csv
+│   ├── understat_players.csv
+│   └── understat_raw.csv
+└── archive/         ← Old versions
+```
+
+### Automated Updates
+
+GitHub Actions runs weekly (Monday 17:00 UTC):
+1. Downloads latest FBref data from S3
+2. Scrapes fresh Understat xG data
+3. Merges datasets
+4. Uploads to S3
+5. Athena picks up new data automatically
+
+> FBref scraping requires `undetected-chromedriver` (Cloudflare bypass) and runs locally. CI only handles Understat + merge.
 
 ---
 
 ## Installation
+
 ```bash
 # Clone repository
 git clone https://github.com/dorukyildiz/football-alpha-analysis.git
@@ -100,21 +156,40 @@ aws configure
 streamlit run src/dashboard.py
 ```
 
+### Running Scrapers Locally
+
+```bash
+# Install scraper dependencies
+pip install undetected-chromedriver selenium playwright
+playwright install chromium
+
+# Run full pipeline
+cd scraper && python run_pipeline.py
+
+# Or run individually
+python fbref_scraper.py      # FBref (opens browser, Cloudflare bypass)
+python understat_scraper.py  # Understat (Playwright)
+python merge_data.py         # Merge datasets
+python upload_to_s3.py       # Upload to S3
+```
+
 ---
 
 ## Notebooks
 
 | Notebook | Description |
 |----------|-------------|
-| `01_EDA.ipynb` | Data exploration, missing values, distributions |
-| `02_Alpha_Analysis.ipynb` | Alpha metrics calculation and analysis |
-| `03_Player_Similarity.ipynb` | Cosine similarity algorithm explained |
-| `04_Visualizations.ipynb` | Complete chart gallery |
+| `01_EDA.ipynb` | Data exploration, missing values, distributions, xG coverage |
+| `02_Alpha_Analysis.ipynb` | Alpha metrics, xGChain/xGBuildup, league comparison |
+| `03_Player_Similarity.ipynb` | Cosine similarity algorithm with dual-source metrics |
+| `04_Visualizations.ipynb` | 11 chart types including xGChain involvement network |
 
-Run notebooks:
 ```bash
+pip install jupyter
 jupyter notebook
 ```
+
+---
 
 ## Screenshots
 
