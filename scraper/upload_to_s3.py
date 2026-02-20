@@ -1,15 +1,19 @@
 import boto3
 import os
+from pathlib import Path
 from datetime import datetime
+
+PROJECT_ROOT = Path(__file__).parent.parent
+DATA_DIR = PROJECT_ROOT / 'data'
 
 S3_BUCKET = 'football-alpha-analysis-doruk'
 
 # File mapping: local path -> S3 key
 UPLOADS = {
-    'data/players_data.csv': 'merged/players_data.csv',
-    'data/fbref_players.csv': 'raw/fbref_players.csv',
-    'data/understat_players.csv': 'raw/understat_players.csv',
-    'data/understat_raw.csv': 'raw/understat_raw.csv',
+    DATA_DIR / 'players_data.csv': 'merged/players_data.csv',
+    DATA_DIR / 'fbref_players.csv': 'raw/fbref_players.csv',
+    DATA_DIR / 'understat_players.csv': 'raw/understat_players.csv',
+    DATA_DIR / 'understat_raw.csv': 'raw/understat_raw.csv',
 }
 
 
@@ -22,13 +26,13 @@ def upload_to_s3():
     failed = 0
 
     for local_path, s3_key in UPLOADS.items():
-        if not os.path.exists(local_path):
+        if not local_path.exists():
             print(f"[SKIP] Not found: {local_path}")
             continue
 
         try:
-            print(f"Uploading {local_path} -> s3://{S3_BUCKET}/{s3_key}")
-            s3.upload_file(local_path, S3_BUCKET, s3_key)
+            print(f"Uploading {local_path.name} -> s3://{S3_BUCKET}/{s3_key}")
+            s3.upload_file(str(local_path), S3_BUCKET, s3_key)
             print(f"  [OK]")
             success += 1
         except Exception as e:

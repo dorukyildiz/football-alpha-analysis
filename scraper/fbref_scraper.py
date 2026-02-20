@@ -2,7 +2,11 @@ import os
 import pandas as pd
 import time
 import random
-from playwright.sync_api import sync_playwright
+import subprocess
+import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from io import StringIO
 from pathlib import Path
 from datetime import datetime
@@ -20,17 +24,52 @@ URLS = {
 }
 
 
-def scrape_table(page, url, table_id, retries=3):
+def get_chrome_version():
+    """Auto-detect installed Chrome major version"""
+    try:
+        # macOS
+        output = subprocess.check_output(
+            ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '--version']
+        ).decode()
+        version = int(output.strip().split()[-1].split('.')[0])
+        print(f"  Detected Chrome version: {version}")
+        return version
+    except Exception:
+        pass
+    try:
+        # Linux
+        output = subprocess.check_output(['google-chrome', '--version']).decode()
+        version = int(output.strip().split()[-1].split('.')[0])
+        print(f"  Detected Chrome version: {version}")
+        return version
+    except Exception:
+        print("  Could not detect Chrome version, using default")
+        return None
+
+
+def create_driver():
+    options = uc.ChromeOptions()
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+
+    chrome_version = get_chrome_version()
+    if chrome_version:
+        driver = uc.Chrome(options=options, version_main=chrome_version)
+    else:
+        driver = uc.Chrome(options=options)
+    return driver
+
+
+def scrape_table(driver, url, table_id, retries=3):
     for attempt in range(retries):
         try:
             print(f"  [{table_id}] Loading... (attempt {attempt + 1})")
-            page.goto(url, wait_until="networkidle", timeout=60000)
-            page.wait_for_timeout(3000)
-
-            # Wait for table to appear
-            page.wait_for_selector(f"#{table_id}", timeout=30000)
-
-            html = page.content()
+            driver.get(url)
+            WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.ID, table_id))
+            )
+            html = driver.page_source
             df = pd.read_html(StringIO(html), attrs={"id": table_id})[0]
 
             if isinstance(df.columns, pd.MultiIndex):
@@ -47,48 +86,30 @@ def scrape_table(page, url, table_id, retries=3):
             print(f"    OK: {len(df)} players, {len(df.columns)} columns")
             return df
         except Exception as e:
-            error_msg = str(e)[:100]
-            print(f"    Error: {error_msg}")
+            print(f"    Error: {e}")
             if attempt < retries - 1:
-                wait = random.uniform(5, 10)
-                print(f"    Waiting {wait:.0f}s before retry...")
-                time.sleep(wait)
+                time.sleep(5)
     return None
 
 
 def scrape_all_tables():
-    print("\nLaunching browser...")
+    print("\nStarting browser...")
+    driver = create_driver()
+    print("Waiting for Cloudflare...")
+    driver.get("https://fbref.com")
+    time.sleep(5)
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(
-            user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
-                       'AppleWebKit/537.36 (KHTML, like Gecko) '
-                       'Chrome/120.0.0.0 Safari/537.36',
-            viewport={'width': 1920, 'height': 1080}
-        )
-        page = context.new_page()
+    dfs = {}
+    failed = []
+    for url, table_id in URLS.items():
+        df = scrape_table(driver, url, table_id)
+        if df is not None:
+            dfs[table_id] = df
+        else:
+            failed.append(table_id)
+        time.sleep(random.uniform(3, 5))
 
-        # Warm up - let Cloudflare pass
-        print("Warming up (Cloudflare)...")
-        page.goto("https://fbref.com", wait_until="networkidle", timeout=60000)
-        page.wait_for_timeout(5000)
-
-        dfs = {}
-        failed = []
-        for url, table_id in URLS.items():
-            df = scrape_table(page, url, table_id)
-            if df is not None:
-                dfs[table_id] = df
-            else:
-                failed.append(table_id)
-            # Rate limit - FBref blocks rapid requests
-            wait = random.uniform(4, 7)
-            print(f"    Waiting {wait:.0f}s...")
-            time.sleep(wait)
-
-        browser.close()
-
+    driver.quit()
     print(f"\n  Successfully scraped: {len(dfs)} tables")
     if failed:
         print(f"  Failed: {', '.join(failed)}")
@@ -135,7 +156,7 @@ def clean_dataframe(df):
 
 def run_scraper():
     print("=" * 60)
-    print("FBref Scraper - Big 5 European Leagues (Playwright)")
+    print("FBref Scraper - Big 5 European Leagues")
     print(f"Tables: {len(URLS)} (post-Opta)")
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
