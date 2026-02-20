@@ -23,7 +23,7 @@ DEFAULT_PATHS = [
 # Athena config
 DATABASE = 'football_analytics'
 TABLE = 'players'
-S3_LOCATION = 's3://football-alpha-analysis-doruk/data/'
+S3_LOCATION = 's3://football-alpha-analysis-doruk/merged/'
 
 # Columns that should be STRING (not DOUBLE)
 STRING_COLUMNS = {
