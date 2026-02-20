@@ -13,7 +13,10 @@ from datetime import datetime
 PROJECT_ROOT = Path(__file__).parent.parent
 DATA_DIR = PROJECT_ROOT / 'data'
 
-# Post-Opta FBref tables (2025-26)
+# Detect CI environment
+IS_CI = os.environ.get('CI', 'false').lower() == 'true'
+
+# 5 available tables
 URLS = {
     'https://fbref.com/en/comps/Big5/stats/players/Big-5-European-Leagues-Stats': 'stats_standard',
     'https://fbref.com/en/comps/Big5/shooting/players/Big-5-European-Leagues-Stats': 'stats_shooting',
@@ -28,7 +31,12 @@ def create_driver():
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
-    driver = uc.Chrome(options=options, version_main=145)
+    options.add_argument("--disable-dev-shm-usage")
+    if IS_CI:
+        options.add_argument("--headless=new")
+
+    # No version_main — auto-detects installed Chrome version
+    driver = uc.Chrome(options=options)
     return driver
 
 
@@ -51,13 +59,13 @@ def scrape_table(driver, url, table_id, retries=3):
                 df = df[df["Player"] != "Player"]
 
             if len(df) < 10:
-                print(f"    ⚠ Table seems empty ({len(df)} rows)")
+                print(f"    Warning: Table seems empty ({len(df)} rows)")
                 return None
 
-            print(f"    ✓ {len(df)} players, {len(df.columns)} columns")
+            print(f"    OK: {len(df)} players, {len(df.columns)} columns")
             return df
         except Exception as e:
-            print(f"    ✗ Error: {e}")
+            print(f"    Error: {e}")
             if attempt < retries - 1:
                 time.sleep(5)
     return None
@@ -83,7 +91,7 @@ def scrape_all_tables():
     driver.quit()
     print(f"\n  Successfully scraped: {len(dfs)} tables")
     if failed:
-        print(f"  Failed/removed: {', '.join(failed)}")
+        print(f"  Failed: {', '.join(failed)}")
     return dfs
 
 
@@ -100,7 +108,7 @@ def merge_dataframes(dfs):
                                       how='left', suffixes=('', f'_{name}'))
                 merge_count += 1
             except Exception as e:
-                print(f"  ⚠ Could not merge {name}: {e}")
+                print(f"  Warning: Could not merge {name}: {e}")
 
     print(f"  Merged {merge_count} tables")
     return merged
@@ -128,12 +136,14 @@ def clean_dataframe(df):
 def run_scraper():
     print("=" * 60)
     print("FBref Scraper - Big 5 European Leagues")
+    print(f"Tables: {len(URLS)} (post-Opta)")
+    print(f"CI mode: {IS_CI}")
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
     dfs = scrape_all_tables()
     if not dfs:
-        print("\n✗ No data scraped!")
+        print("\nNo data scraped!")
         return None
 
     print("\nMerging tables...")

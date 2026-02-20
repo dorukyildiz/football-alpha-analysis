@@ -17,27 +17,34 @@ jobs:
         with:
           python-version: '3.11'
 
-      # ── Install dependencies ──
+      # ── Install Chrome (for undetected-chromedriver) ──
+      - name: Install Chrome
+        run: |
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
+          google-chrome --version
+
+      # ── Install Python dependencies ──
       - name: Install Python packages
         run: |
           pip install pandas numpy boto3 lxml html5lib
           pip install undetected-chromedriver selenium
           pip install playwright
+          playwright install --with-deps chromium
 
-      - name: Install Playwright Chromium
-        run: playwright install --with-deps chromium
+      # ── Create data directory ──
+      - name: Create data directory
+        run: mkdir -p data
 
       # ── Scrape FBref ──
       - name: Scrape FBref (5 tables)
         working-directory: scraper
         run: python fbref_scraper.py
-        continue-on-error: true
 
       # ── Scrape Understat ──
       - name: Scrape Understat (xG data)
         working-directory: scraper
         run: python understat_scraper.py
-        continue-on-error: true
 
       # ── Verify scraped data ──
       - name: Verify scraped files

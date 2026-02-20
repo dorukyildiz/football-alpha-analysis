@@ -12,6 +12,9 @@ DATA_DIR = PROJECT_ROOT / 'data'
 
 CURRENT_SEASON = 2025
 
+# Detect CI environment
+IS_CI = os.environ.get('CI', 'false').lower() == 'true'
+
 # 2025-26 season teams (Understat URL format)
 LEAGUE_TEAMS = {
     'Premier League': [
@@ -76,17 +79,17 @@ def scrape_team_players(page, team_name, league, season=CURRENT_SEASON):
                 players_data = json.loads(json_str)
 
         if not players_data:
-            print(f"      ✗ {team_name}: no player data found")
+            print(f"      X {team_name}: no player data found")
             return None
 
         df = pd.DataFrame(players_data)
         df['league'] = league
-        print(f"      ✓ {team_name}: {len(df)} players")
+        print(f"      OK {team_name}: {len(df)} players")
         return df
 
     except Exception as e:
         error_msg = str(e)[:80]
-        print(f"      ✗ {team_name}: {error_msg}")
+        print(f"      X {team_name}: {error_msg}")
         return None
 
 
@@ -94,6 +97,7 @@ def scrape_all_leagues(season=CURRENT_SEASON):
     print("=" * 60)
     print("Understat Scraper - Big 5 European Leagues (Playwright)")
     print(f"Season: {season}/{season + 1}")
+    print(f"CI mode: {IS_CI}")
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
@@ -104,7 +108,7 @@ def scrape_all_leagues(season=CURRENT_SEASON):
 
     with sync_playwright() as p:
         print("\nLaunching browser...")
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=True)
         context = browser.new_context(
             user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
                        'AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -144,7 +148,7 @@ def scrape_all_leagues(season=CURRENT_SEASON):
             print(f"  - {t}")
 
     if not all_dfs:
-        print("\n✗ No data scraped!")
+        print("\nNo data scraped!")
         return None
 
     combined = pd.concat(all_dfs, ignore_index=True)
