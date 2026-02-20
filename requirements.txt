@@ -14,15 +14,6 @@ pyathena
 # ML
 scikit-learn
 
-# Scraper - FBref
-undetected-chromedriver
-lxml
-html5lib
-
-# Scraper - Understat
-requests
-beautifulsoup4
-
 # Dashboard
 streamlit>=1.32.0
 

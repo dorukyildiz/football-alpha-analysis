@@ -2,47 +2,83 @@ name: Update Dataset Weekly
 
 on:
   schedule:
-    - cron: '0 17 * * 1'
-  workflow_dispatch:
+    - cron: '0 17 * * 1'  # Every Monday 17:00 UTC
+  workflow_dispatch:        # Manual trigger
 
 jobs:
-  update:
+  scrape-and-update:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
+    timeout-minutes: 30
 
-      - uses: actions/setup-python@v4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: pip install pandas numpy requests beautifulsoup4 boto3 lxml
+      # ── Install dependencies ──
+      - name: Install Python packages
+        run: |
+          pip install pandas numpy boto3 lxml html5lib
+          pip install undetected-chromedriver selenium
+          pip install playwright
 
-      - name: Download existing FBref data from S3
+      - name: Install Playwright Chromium
+        run: playwright install --with-deps chromium
+
+      # ── Scrape FBref ──
+      - name: Scrape FBref (5 tables)
+        working-directory: scraper
+        run: python fbref_scraper.py
+        continue-on-error: true
+
+      # ── Scrape Understat ──
+      - name: Scrape Understat (xG data)
+        working-directory: scraper
+        run: python understat_scraper.py
+        continue-on-error: true
+
+      # ── Verify scraped data ──
+      - name: Verify scraped files
+        run: |
+          echo "=== Scraped files ==="
+          ls -la data/
+          echo ""
+          if [ ! -f data/fbref_players.csv ]; then
+            echo "[ERROR] fbref_players.csv missing"
+            exit 1
+          fi
+          if [ ! -f data/understat_players.csv ]; then
+            echo "[ERROR] understat_players.csv missing"
+            exit 1
+          fi
+          echo "[OK] Both source files present"
+          wc -l data/fbref_players.csv data/understat_players.csv
+
+      # ── Merge datasets ──
+      - name: Merge FBref + Understat
+        working-directory: scraper
+        run: python merge_data.py
+
+      # ── Verify merged data ──
+      - name: Verify merged file
+        run: |
+          python -c "
+          import pandas as pd
+          df = pd.read_csv('data/players_data.csv')
+          print(f'Players: {len(df)}')
+          print(f'Columns: {len(df.columns)}')
+          print(f'xG coverage: {df[\"xg\"].notna().sum()}/{len(df)}')
+          assert len(df) > 2000, f'Too few players: {len(df)}'
+          print('[OK] Merge verified')
+          "
+
+      # ── Upload to S3 ──
+      - name: Upload to S3
+        working-directory: scraper
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: eu-central-1
-        run: |
-          mkdir -p data
-          python -c "
-          import boto3
-          s3 = boto3.client('s3')
-          try:
-              s3.download_file('football-alpha-analysis-doruk', 'data/fbref_players.csv', 'data/fbref_players.csv')
-              print('[OK] FBref data downloaded')
-          except Exception as e:
-              print(f'[WARN] {e}')
-          "
-
-      - name: Scrape Understat
-        working-directory: scraper
-        run: python understat_scraper.py
-
-      - name: Merge datasets
-        working-directory: scraper
-        run: python merge_data.py
-
-      - name: Upload to S3
-        working-directory: scraper
         run: python upload_to_s3.py
