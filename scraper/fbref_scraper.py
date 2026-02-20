@@ -16,7 +16,7 @@ DATA_DIR = PROJECT_ROOT / 'data'
 # Detect CI environment
 IS_CI = os.environ.get('CI', 'false').lower() == 'true'
 
-# 5 available tables
+# Post-Opta: only 5 available tables
 URLS = {
     'https://fbref.com/en/comps/Big5/stats/players/Big-5-European-Leagues-Stats': 'stats_standard',
     'https://fbref.com/en/comps/Big5/shooting/players/Big-5-European-Leagues-Stats': 'stats_shooting',
@@ -24,6 +24,18 @@ URLS = {
     'https://fbref.com/en/comps/Big5/playingtime/players/Big-5-European-Leagues-Stats': 'stats_playing_time',
     'https://fbref.com/en/comps/Big5/misc/players/Big-5-European-Leagues-Stats': 'stats_misc',
 }
+
+
+def get_chrome_version():
+    """Auto-detect installed Chrome major version"""
+    import subprocess
+    try:
+        output = subprocess.check_output(['google-chrome', '--version']).decode()
+        version = int(output.strip().split()[-1].split('.')[0])
+        print(f"  Detected Chrome version: {version}")
+        return version
+    except Exception:
+        return None
 
 
 def create_driver():
@@ -35,8 +47,11 @@ def create_driver():
     if IS_CI:
         options.add_argument("--headless=new")
 
-    # No version_main — auto-detects installed Chrome version
-    driver = uc.Chrome(options=options)
+    chrome_version = get_chrome_version()
+    if chrome_version:
+        driver = uc.Chrome(options=options, version_main=chrome_version)
+    else:
+        driver = uc.Chrome(options=options)
     return driver
 
 
