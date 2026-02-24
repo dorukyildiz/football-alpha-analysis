@@ -8,7 +8,7 @@ Data-driven football analytics platform analyzing player performance across Euro
 
 ## Overview
 
-This project calculates "Alpha" metrics — borrowed from quantitative finance — to identify overperforming and underperforming players in the 2025-26 season.
+This project calculates "Alpha" metrics - the difference between actual performance and expected performance - to identify overperforming and underperforming players in the 2025-26 season.
 
 | Metric | Formula | Meaning |
 |--------|---------|---------|
