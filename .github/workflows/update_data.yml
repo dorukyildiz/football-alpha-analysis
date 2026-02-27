@@ -5,15 +5,13 @@ on:
     - cron: '0 17 * * 1'  # Every Monday 17:00 UTC
   workflow_dispatch:        # Manual trigger
 
-# FBref requires undetected-chromedriver (Cloudflare) so it runs locally.
-# CI only: downloads FBref CSV from S3, scrapes Understat, merges, uploads.
-# To update FBref data: run `python scraper/fbref_scraper.py` locally,
-# then `python scraper/upload_to_s3.py` to push fbref_players.csv to S3.
+# - FBref: Scrapling StealthySession (Cloudflare bypass, headless)
+# - Understat: Playwright (no Cloudflare)
 
 jobs:
   scrape-and-update:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
@@ -24,32 +22,23 @@ jobs:
 
       # ── Install dependencies ──
       - name: Install Python packages
-        run: pip install pandas numpy boto3 lxml html5lib playwright
+        run: pip install pandas numpy boto3 lxml html5lib playwright "scrapling[all]"
 
-      - name: Install Playwright Chromium
-        run: playwright install --with-deps chromium
+      - name: Install browser engines
+        run: |
+          scrapling install
+          playwright install --with-deps chromium
 
       - name: Create data directory
         run: mkdir -p data
 
-      # ── Download FBref data from S3 ──
-      - name: Download FBref CSV from S3
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: eu-central-1
-        run: |
-          python -c "
-          import boto3
-          s3 = boto3.client('s3')
-          s3.download_file('football-alpha-analysis-doruk', 'raw/fbref_players.csv', 'data/fbref_players.csv')
-          import pandas as pd
-          df = pd.read_csv('data/fbref_players.csv')
-          print(f'[OK] FBref data downloaded: {len(df)} players, {len(df.columns)} columns')
-          "
+      # ── Scrape FBref ──
+      - name: Scrape FBref (Scrapling)
+        working-directory: scraper
+        run: python fbref_scraper.py
 
       # ── Scrape Understat ──
-      - name: Scrape Understat (xG data)
+      - name: Scrape Understat (Playwright)
         working-directory: scraper
         run: python understat_scraper.py
 
