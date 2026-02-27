@@ -1,15 +1,10 @@
 import os
 import pandas as pd
 import time
-import random
-import subprocess
-import undetected_chromedriver as uc
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from io import StringIO
 from pathlib import Path
 from datetime import datetime
+from scrapling.fetchers import StealthySession
 
 PROJECT_ROOT = Path(__file__).parent.parent
 DATA_DIR = PROJECT_ROOT / 'data'
@@ -24,53 +19,21 @@ URLS = {
 }
 
 
-def get_chrome_version():
-    """Auto-detect installed Chrome major version"""
-    try:
-        # macOS
-        output = subprocess.check_output(
-            ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '--version']
-        ).decode()
-        version = int(output.strip().split()[-1].split('.')[0])
-        print(f"  Detected Chrome version: {version}")
-        return version
-    except Exception:
-        pass
-    try:
-        # Linux
-        output = subprocess.check_output(['google-chrome', '--version']).decode()
-        version = int(output.strip().split()[-1].split('.')[0])
-        print(f"  Detected Chrome version: {version}")
-        return version
-    except Exception:
-        print("  Could not detect Chrome version, using default")
-        return None
-
-
-def create_driver():
-    options = uc.ChromeOptions()
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-
-    chrome_version = get_chrome_version()
-    if chrome_version:
-        driver = uc.Chrome(options=options, version_main=chrome_version)
-    else:
-        driver = uc.Chrome(options=options)
-    return driver
-
-
-def scrape_table(driver, url, table_id, retries=3):
+def scrape_table(session, url, table_id, retries=3):
+    """Scrape a single FBref table using StealthySession"""
     for attempt in range(retries):
         try:
             print(f"  [{table_id}] Loading... (attempt {attempt + 1})")
-            driver.get(url)
-            WebDriverWait(driver, 30).until(
-                EC.presence_of_element_located((By.ID, table_id))
-            )
-            html = driver.page_source
-            df = pd.read_html(StringIO(html), attrs={"id": table_id})[0]
+            response = session.fetch(url)
+
+            table = response.css(f'#{table_id}')
+            if not table:
+                print(f"    Table #{table_id} not found in page")
+                if attempt < retries - 1:
+                    time.sleep(5)
+                continue
+
+            df = pd.read_html(StringIO(table[0].html_content))[0]
 
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.droplevel(0)
@@ -86,30 +49,27 @@ def scrape_table(driver, url, table_id, retries=3):
             print(f"    OK: {len(df)} players, {len(df.columns)} columns")
             return df
         except Exception as e:
-            print(f"    Error: {e}")
+            print(f"    Error: {str(e)[:100]}")
             if attempt < retries - 1:
                 time.sleep(5)
     return None
 
 
 def scrape_all_tables():
-    print("\nStarting browser...")
-    driver = create_driver()
-    print("Waiting for Cloudflare...")
-    driver.get("https://fbref.com")
-    time.sleep(5)
-
+    """Scrape all FBref tables using a single StealthySession"""
     dfs = {}
     failed = []
-    for url, table_id in URLS.items():
-        df = scrape_table(driver, url, table_id)
-        if df is not None:
-            dfs[table_id] = df
-        else:
-            failed.append(table_id)
-        time.sleep(random.uniform(3, 5))
 
-    driver.quit()
+    print("\nStarting Scrapling StealthySession...")
+    with StealthySession(headless=True, solve_cloudflare=True, network_idle=True, timeout=90000) as session:
+        for url, table_id in URLS.items():
+            df = scrape_table(session, url, table_id)
+            if df is not None:
+                dfs[table_id] = df
+            else:
+                failed.append(table_id)
+            time.sleep(3)
+
     print(f"\n  Successfully scraped: {len(dfs)} tables")
     if failed:
         print(f"  Failed: {', '.join(failed)}")
@@ -156,7 +116,7 @@ def clean_dataframe(df):
 
 def run_scraper():
     print("=" * 60)
-    print("FBref Scraper - Big 5 European Leagues")
+    print("FBref Scraper - Big 5 European Leagues (Scrapling)")
     print(f"Tables: {len(URLS)} (post-Opta)")
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
