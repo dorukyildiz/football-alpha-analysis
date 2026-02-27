@@ -28,7 +28,7 @@ This project calculates "Alpha" metrics - the difference between actual performa
 | Data Sources | FBref (76 columns), Understat (10 xG columns) |
 | Cloud | AWS S3, AWS Athena |
 | Backend | Python, Pandas, NumPy, Scikit-learn |
-| Scraping | Playwright (Understat), undetected-chromedriver (FBref) |
+| Scraping | Scrapling (FBref, Cloudflare bypass), Playwright (Understat) |
 | Visualization | Matplotlib, Seaborn, adjustText |
 | Dashboard | Streamlit |
 | PDF Generation | ReportLab |
@@ -67,7 +67,7 @@ football-alpha-analysis/
 │   ├── generate_athena_sql.py      # Athena table DDL generator
 │   └── dashboard.py                # Streamlit web app
 ├── scraper/
-│   ├── fbref_scraper.py            # FBref scraper (undetected-chromedriver)
+│   ├── fbref_scraper.py            # FBref scraper (Scrapling, Cloudflare bypass)
 │   ├── understat_scraper.py        # Understat scraper (Playwright)
 │   ├── merge_data.py               # 3-step merge (exact + name + last-name)
 │   ├── upload_to_s3.py             # S3 upload (merged/ + raw/)
@@ -135,7 +135,7 @@ GitHub Actions runs weekly (Monday 17:00 UTC):
 4. Uploads to S3
 5. Athena picks up new data automatically
 
-> FBref scraping requires `undetected-chromedriver` (Cloudflare bypass) and runs locally. CI only handles Understat + merge.
+> FBref scraping uses Scrapling (Cloudflare bypass) but only works locally — Cloudflare blocks IPs in CI. CI handles Understat + merge.
 
 ---
 
@@ -160,17 +160,18 @@ streamlit run src/dashboard.py
 
 ```bash
 # Install scraper dependencies
-pip install undetected-chromedriver selenium playwright
+pip install "scrapling[all]" playwright
+scrapling install
 playwright install chromium
 
 # Run full pipeline
-cd scraper && python run_pipeline.py
+python scraper/run_pipeline.py
 
 # Or run individually
-python fbref_scraper.py      # FBref (opens browser, Cloudflare bypass)
-python understat_scraper.py  # Understat (Playwright)
-python merge_data.py         # Merge datasets
-python upload_to_s3.py       # Upload to S3
+python scraper/fbref_scraper.py      # FBref (Scrapling, headless Cloudflare bypass)
+python scraper/understat_scraper.py  # Understat (Playwright)
+python scraper/merge_data.py         # Merge datasets
+python scraper/upload_to_s3.py       # Upload to S3
 ```
 
 ---
